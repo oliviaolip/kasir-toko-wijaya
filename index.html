@@ -416,7 +416,12 @@ async function loadItemsFromSheet(){
 }
 
 $('q').addEventListener('input', ()=> renderList($('q').value));
+$('q').addEventListener('input', ()=> renderList($('q').value));
 renderList(''); renderCart();
-if(HURL) loadItemsFromSheet();
+if(HURL){
+  loadItemsFromSheet();
+  setInterval(()=>{ if(!document.hidden) loadItemsFromSheet(); }, 60000);
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) loadItemsFromSheet(); });
+}
 </script>
 </body></html>
