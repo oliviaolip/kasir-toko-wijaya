@@ -76,6 +76,41 @@ label{display:block;font-size:12px;color:#555;margin:8px 0 3px}
  .mask.printing .sheet{box-shadow:none;max-width:100%;padding:0}
  .receipt{border:0;padding:0;font-size:11.5px}
 }
+
+/* ===== rekap v2 ===== */
+#mRekap .sheet{max-height:90vh;overflow:auto}
+.rkHero{background:linear-gradient(160deg,#0f7a55,#12694b);border-radius:16px;padding:14px 16px;color:#fff;box-shadow:0 6px 18px rgba(15,122,85,.22)}
+.rkHero .lbl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;opacity:.8}
+.rkHero .big{font-size:26px;font-weight:800;letter-spacing:-.5px;margin-top:2px}
+.rkChips{display:flex;gap:8px;margin-top:12px}
+.chip{flex:1;background:rgba(255,255,255,.16);border-radius:11px;padding:8px 10px}
+.chip b{display:block;font-size:15px;font-weight:700}
+.chip span{font-size:10.5px;opacity:.85}
+.seg{display:flex;background:#eef2ef;border-radius:12px;padding:4px;margin:12px 0 8px}
+.seg button{flex:1;border:0;background:transparent;padding:9px 0;border-radius:9px;font-size:13px;font-weight:600;color:#5d6862}
+.seg button.on{background:#fff;color:#0f7a55;box-shadow:0 1px 3px rgba(0,0,0,.10)}
+.rkRow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 10px 12px 13px;background:#fff;border:1px solid #e7ece9;border-radius:12px;margin-bottom:8px}
+.rkRow.tap{cursor:pointer}
+.rkRow:active{transform:scale(.995)}
+.rkRow .nm{font-size:14px;font-weight:600;color:#1d2621}
+.rkRow .sub{font-size:11.5px;color:#8a948e;margin-top:2px}
+.rkRow .amt{font-size:14px;font-weight:700;color:#0f7a55;font-variant-numeric:tabular-nums;white-space:nowrap}
+.rkRow .chev{color:#c3ccc6;font-size:15px;margin-left:5px;line-height:1}
+.trxCard{background:#fff;border:1px solid #e7ece9;border-radius:14px;padding:12px;margin-bottom:9px}
+.trxCard .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.trxCard .tm{font-size:13px;font-weight:700;color:#1d2621;font-variant-numeric:tabular-nums}
+.trxCard .tot{font-size:15px;font-weight:800;color:#0f7a55;font-variant-numeric:tabular-nums}
+.trxCard .who{display:inline-block;margin-top:6px;background:#eaf4ef;color:#0f7a55;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:600}
+.trxCard ul{list-style:none;margin:8px 0 0;padding:0}
+.trxCard li{font-size:12.5px;color:#4c574f;padding:3px 0;border-bottom:1px dashed #eef1ef}
+.trxCard li:last-child{border:0}
+.trxCard li b{color:#1d2621}
+.delLink{margin-top:9px;border:0;background:#fdecea;color:#b3261e;font-size:12px;font-weight:600;padding:8px 12px;border-radius:10px;width:100%}
+.rkBack{display:inline-flex;align-items:center;gap:6px;background:#eef2ef;border:0;border-radius:999px;padding:7px 13px;font-size:12.5px;font-weight:600;color:#41504a;margin:2px 0 10px}
+.rkHead{display:flex;justify-content:space-between;align-items:baseline;margin:14px 0 8px}
+.rkHead .t{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#7d8983}
+.rkHead .s{font-size:12.5px;font-weight:700;color:#0f7a55;font-variant-numeric:tabular-nums}
+.rkNote{font-size:12px;color:#8a948e;padding:10px 2px}
 </style></head>
 <body>
 <header>
@@ -350,10 +385,7 @@ $('rShare').addEventListener('click', ()=>{
 });
 
 // ===== rekap =====
-$('tabKasir').addEventListener('click', ()=>{
-  $('tabKasir').classList.add('on'); $('tabRekap').classList.remove('on');
-  $('q').style.display=''; $('list').style.display=''; renderList($('q').value);
-});
+$('tabKasir').addEventListener('click', ()=>showKasir());
 $('tabRekap').addEventListener('click', async ()=>{
   $('tabRekap').classList.add('on'); $('tabKasir').classList.remove('on');
   $('q').style.display='none'; $('list').style.display='none';
@@ -362,17 +394,18 @@ $('tabRekap').addEventListener('click', async ()=>{
     const d=new Date();
     $('rDate').value = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   }
-  rkHour = null; rkMin = null; rkCust = null;
+  rkHour = null; rkMin = null; rkCust = null; rkSeg = 'cust';
   await loadRekap();
 });
-$('rkClose').addEventListener('click', ()=>{
+function showKasir(){
   $('mRekap').classList.remove('on');
   $('tabKasir').classList.add('on'); $('tabRekap').classList.remove('on');
   $('q').style.display=''; $('list').style.display=''; renderList($('q').value);
-});
+}
+$('rkClose').addEventListener('click', showKasir);
 $('rDate').addEventListener('change', ()=>{ rkHour=null; rkMin=null; rkCust=null; loadRekap(); });
 
-let RK = [], rkHour = null, rkMin = null, rkCust = null;
+let RK = [], rkHour = null, rkMin = null, rkCust = null, rkSeg = 'cust';
 
 function hms(t){
   const p = String(t||'').replace(/\./g,':').split(':').map(x=>String(x).padStart(2,'0'));
@@ -381,6 +414,11 @@ function hms(t){
 function tglKey(){
   const d = $('rDate').value.split('-');
   return d[2]+'/'+d[1]+'/'+d[0];
+}
+function pcs(rows){
+  let n = 0;
+  rows.forEach(x=> (x.items||[]).forEach(i=> n += Number(i.qty||0)));
+  return n;
 }
 async function loadRekap(){
   const box = $('rekapBody');
@@ -407,104 +445,113 @@ function custAgg(rows){
   return o;
 }
 
+function rkCard(rows){
+  const om = rows.reduce((a,x)=> a + Number(x.total||0), 0);
+  const agg = custAgg(rows);
+  return '<div class="rkHero">'+
+    '<div class="lbl">Omzet tanggal ini</div>'+
+    '<div class="big">'+rp(om)+'</div>'+
+    '<div class="rkChips">'+
+      '<div class="chip"><b>'+rows.length+'</b><span>transaksi</span></div>'+
+      '<div class="chip"><b>'+pcs(rows)+'</b><span>barang (pcs)</span></div>'+
+      '<div class="chip"><b>'+Object.keys(agg).length+'</b><span>pelanggan</span></div>'+
+    '</div>'+
+  '</div>';
+}
+
+function rkTrxCard(x){
+  const t = hms(x.jam);
+  const isi = (x.items||[]).map(i=>
+    '<li><b>'+i.qty+'x</b> '+i.nama+(i.ukuran? ' <span style="color:#8a948e">&middot; '+i.ukuran+'</span>':'')+
+    ' <span style="float:right;color:#4c574f">'+rp(Number(i.qty||0)*Number(i.harga||0))+'</span></li>').join('');
+  return '<div class="trxCard">'+
+    '<div class="top"><span class="tm">'+String(x.jam||'')+'</span><span class="tot">'+rp(x.total)+'</span></div>'+
+    '<div class="who">'+(x.customer || 'Umum')+'</div>'+
+    '<ul>'+isi+'</ul>'+
+    '<button class="delLink" data-del="'+x.id+'">Hapus transaksi ini</button>'+
+  '</div>';
+}
+
 function renderRekap(){
   const box = $('rekapBody'), crumb = $('rkCrumb');
-  const omzet = RK.reduce((a,x)=> a + Number(x.total||0), 0);
-  $('rkDelDay').style.display = rkHour ? 'none' : 'block';
+  $('rkDelDay').style.display = (rkHour || rkCust)? 'none' : 'block';
+  crumb.innerHTML = '';
 
+  // ---- rincian per pelanggan ----
   if(rkCust){
-    const inC = RK.filter(x=> (x.customer||'Umum') === rkCust);
+    const inC = RK.filter(x=> (x.customer||'Umum') === rkCust)
+                  .sort((a,b)=> String(a.jam).localeCompare(String(b.jam)));
     const omc = inC.reduce((a,x)=> a + Number(x.total||0), 0);
-    crumb.innerHTML = '<button class="backb" data-back="3">\u2039 semua</button> Pelanggan: '+rkCust;
     box.innerHTML =
-      '<div class="tot2"><span>Transaksi</span><b>'+inC.length+'</b></div>'+
-      '<div class="tot2"><span>Total belanja</span><b>'+rp(omc)+'</b></div>'+
-      '<div class="dhead">Rincian</div>'+
-      inC.slice().sort((a,b)=> String(a.jam).localeCompare(String(b.jam))).map(x=>{
-        const isi = (x.items||[]).map(i=> i.qty+'x '+i.nama+(i.ukuran?' ('+i.ukuran+')':'')).join(', ');
-        return '<div class="trx"><div class="trxTop"><span>'+x.jam+' &middot; '+x.id+'</span><span>'+rp(x.total)+'</span></div>'+
-               '<div class="trxSub">'+isi+'</div>'+
-               '<button class="delb" data-del="'+x.id+'">Hapus transaksi ini</button></div>';
-      }).join('');
+      '<button class="rkBack" data-back="3">&#8249; Semua pelanggan</button>'+
+      '<div class="rkHead"><span class="t">'+rkCust+'</span><span class="s">'+inC.length+' trx &middot; '+rp(omc)+'</span></div>'+
+      (inC.length? inC.map(rkTrxCard).join('') : '<div class="rkNote">Tidak ada transaksi.</div>');
     return;
   }
 
-  if(!rkHour && !rkMin){
-    crumb.textContent = tglKey() + ' \u00b7 semua jam';
-    if(!RK.length){ box.innerHTML = '<div class="empty">Belum ada transaksi tanggal ini.</div>'; return; }
-    const per = {};
-    RK.forEach(x=>{
-      const h = hms(x.jam).h;
-      per[h] = per[h] || {n:0, t:0};
-      per[h].n++; per[h].t += Number(x.total||0);
-    });
-    box.innerHTML =
-      '<div class="tot2"><span>Jumlah transaksi</span><b>'+RK.length+'</b></div>'+
-      '<div class="tot2"><span>Omzet</span><b>'+rp(omzet)+'</b></div>'+
-      '<div class="dhead">Per pelanggan (ketuk untuk rincian)</div>'+
-      Object.keys(custAgg(RK)).sort().map(c=>
-        '<div class="drill" data-c="'+c+'"><span>'+c+'</span><span class="rgt"><i>'+custAgg(RK)[c].n+' trx</i> '+rp(custAgg(RK)[c].t)+'</span></div>'
-      ).join('')+
-      '<div class="dhead">Per jam (ketuk untuk per menit)</div>'+
-      Object.keys(per).sort().map(h=>
-        '<div class="drill" data-h="'+h+'"><span>Jam '+h+'</span><span class="rgt"><i>'+per[h].n+' trx</i> '+rp(per[h].t)+'</span></div>'
-      ).join('');
-    return;
-  }
-
+  // ---- rincian dalam 1 jam (per menit) ----
   if(rkHour && !rkMin){
-    const inHour = RK.filter(x=> hms(x.jam).h === rkHour);
+    const inHour = RK.filter(x=> hms(x.jam).h === rkHour)
+                     .sort((a,b)=> String(a.jam).localeCompare(String(b.jam)));
     const om = inHour.reduce((a,x)=> a + Number(x.total||0), 0);
-    crumb.innerHTML = '<button class="backb" data-back="1">\u2039 jam</button> Jam '+rkHour+' \u00b7 per menit';
-    const per = {};
-    inHour.forEach(x=>{
-      const m = hms(x.jam).m;
-      per[m] = per[m] || {n:0, t:0};
-      per[m].n++; per[m].t += Number(x.total||0);
-    });
     box.innerHTML =
-      '<div class="tot2"><span>Transaksi jam '+rkHour+'</span><b>'+inHour.length+'</b></div>'+
-      '<div class="tot2"><span>Omzet jam '+rkHour+'</span><b>'+rp(om)+'</b></div>'+
-      '<div class="dhead">Per menit (ketuk untuk per detik)</div>'+
-      Object.keys(per).sort().map(m=>
-        '<div class="drill" data-m="'+m+'"><span>Menit '+m+'</span><span class="rgt"><i>'+per[m].n+' trx</i> '+rp(per[m].t)+'</span></div>'
-      ).join('');
+      '<button class="rkBack" data-back="1">&#8249; Ringkasan</button>'+
+      '<div class="rkHead"><span class="t">Jam '+rkHour+'</span><span class="s">'+inHour.length+' trx &middot; '+rp(om)+'</span></div>'+
+      inHour.map(rkTrxCard).join('');
     return;
   }
 
-  const inMin = RK.filter(x=> hms(x.jam).h === rkHour && hms(x.jam).m === rkMin);
-  const om2 = inMin.reduce((a,x)=> a + Number(x.total||0), 0);
-  crumb.innerHTML = '<button class="backb" data-back="1">\u2039 jam</button> <button class="backb" data-back="2">\u2039 menit</button> Jam '+rkHour+':'+rkMin+' \u00b7 per detik';
-  box.innerHTML =
-    '<div class="tot2"><span>Transaksi</span><b>'+inMin.length+'</b></div>'+
-    '<div class="tot2"><span>Omzet</span><b>'+rp(om2)+'</b></div>'+
-    '<div class="dhead">Detik transaksi</div>'+
-    inMin.slice().sort((a,b)=> String(a.jam).localeCompare(String(b.jam))).map(x=>{
-      const t = hms(x.jam);
-      const isi = (x.items||[]).map(i=> i.qty+'x '+i.nama+(i.ukuran?' ('+i.ukuran+')':'')).join(', ');
-      return '<div class="trx"><div class="trxTop"><span><b>'+t.s+' dtk</b> &middot; '+x.id+'</span><span>'+rp(x.total)+'</span></div>'+
-             '<div class="trxSub">'+isi+'</div>'+
-             '<button class="delb" data-del="'+x.id+'">Hapus transaksi ini</button></div>';
-    }).join('');
+  // ---- ringkasan tanggal ----
+  if(!RK.length){
+    box.innerHTML = rkCard(RK) + '<div class="rkNote">Belum ada transaksi tanggal ini.</div>';
+    return;
+  }
+
+  const agg = custAgg(RK);
+  const perJam = {};
+  RK.forEach(x=>{
+    const h = hms(x.jam).h;
+    perJam[h] = perJam[h] || {n:0, t:0};
+    perJam[h].n++; perJam[h].t += Number(x.total||0);
+  });
+
+  const listCust = Object.keys(agg).sort().map(c=>
+    '<div class="rkRow tap" data-c="'+c+'">'+
+      '<div><div class="nm">'+c+'</div><div class="sub">'+agg[c].n+' transaksi</div></div>'+
+      '<div style="display:flex;align-items:center"><span class="amt">'+rp(agg[c].t)+'</span><span class="chev">&#8250;</span></div>'+
+    '</div>').join('');
+
+  const listJam = Object.keys(perJam).sort().map(h=>
+    '<div class="rkRow tap" data-h="'+h+'">'+
+      '<div><div class="nm">Jam '+h+':00</div><div class="sub">'+perJam[h].n+' transaksi</div></div>'+
+      '<div style="display:flex;align-items:center"><span class="amt">'+rp(perJam[h].t)+'</span><span class="chev">&#8250;</span></div>'+
+    '</div>').join('');
+
+  box.innerHTML = rkCard(RK)+
+    '<div class="seg">'+
+      '<button data-seg="cust" class="'+(rkSeg==='cust'?'on':'')+'">Per pelanggan</button>'+
+      '<button data-seg="jam" class="'+(rkSeg==='jam'?'on':'')+'">Per jam</button>'+
+    '</div>'+
+    (rkSeg==='cust'? listCust : listJam);
 }
 
 $('rekapBody').addEventListener('click', e=>{
+  const seg = e.target.closest('[data-seg]');
+  if(seg){ rkSeg = seg.dataset.seg; renderRekap(); return; }
   const c = e.target.closest('[data-c]');
   if(c){ rkCust = c.dataset.c; rkHour = null; rkMin = null; renderRekap(); return; }
-  const h = e.target.closest('[data-h]'), m = e.target.closest('[data-m]');
+  const h = e.target.closest('[data-h]');
   if(h){ rkHour = h.dataset.h; rkMin = null; renderRekap(); return; }
-  if(m){ rkMin = m.dataset.m; renderRekap(); return; }
   const del = e.target.closest('[data-del]');
   if(del) hapusTrx(del.dataset.del);
 });
 $('rkCrumb').addEventListener('click', e=>{
   const b = e.target.closest('[data-back]');
   if(!b) return;
-  if(b.dataset.back === '3'){ rkCust = null; rkHour = null; rkMin = null; }
-  else if(b.dataset.back === '1'){ rkHour = null; rkMin = null; }
-  else { rkMin = null; }
+  rkCust = null; rkHour = null; rkMin = null;
   renderRekap();
 });
+$('rekapBody').addEventListener('click', ()=>{});
 
 function rekapWA(){
   const omzet = RK.reduce((a,x)=> a + Number(x.total||0), 0);
@@ -529,8 +576,7 @@ function rekapWA(){
   return t;
 }
 $('rkWa').addEventListener('click', ()=>{
-  const teks = rekapWA();
-  window.open('https://wa.me/?text=' + encodeURIComponent(teks), '_blank');
+  window.open('https://wa.me/?text=' + encodeURIComponent(rekapWA()), '_blank');
 });
 
 $('rkDelDay').addEventListener('click', async ()=>{
@@ -540,17 +586,25 @@ $('rkDelDay').addEventListener('click', async ()=>{
   if(!confirm('Yakin? Data di Sheet akan dihapus permanen.')) return;
   try{
     await fetch(KURL, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({action:'hapusTanggal', tanggal: tglKey()})});
-    rkHour = null; rkMin = null;
+    rkHour = null; rkMin = null; rkCust = null;
     await loadRekap();
-    alert('Rekap tanggal ' + tglKey() + ' sudah dihapus.');
+    if(RK.length === 0) alert('Rekap tanggal ' + tglKey() + ' sudah dihapus.');
+    else alert('Gagal menghapus ('+RK.length+' transaksi masih ada).\n\nPenyebab: skrip di Sheet masih versi lama.\nPerbaiki: Extensions > Apps Script > tempel apps_script_kasir.gs > Deploy > Manage deployments > pensil > New version > Deploy.');
   }catch(e){ alert('Gagal menghapus. Cek internet / URL kasir.'); }
 });
 
 async function hapusTrx(id){
   if(!confirm('Hapus transaksi ' + id + '?')) return;
+  if(!KURL){ alert('URL kasir belum diisi.'); return; }
   try{
     await fetch(KURL, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({action:'hapus', id:id})});
     await loadRekap();
+    const masih = RK.some(x=> String(x.id) === String(id));
+    if(masih){
+      alert('Transaksi BELUM terhapus.\n\nPenyebab: skrip di Sheet masih versi lama (belum bisa menghapus).\nPerbaiki sekali saja:\n1. Buka Sheet KASIR TOKO WIJAYA > Extensions > Apps Script\n2. Hapus isi, tempel file apps_script_kasir.gs yang baru > Ctrl+S\n3. Deploy > Manage deployments > ikon pensil > Version: New version > Deploy');
+    } else {
+      alert('Transaksi ' + id + ' sudah dihapus.');
+    }
   }catch(e){ alert('Gagal menghapus. Cek internet / URL kasir.'); }
 }
 
