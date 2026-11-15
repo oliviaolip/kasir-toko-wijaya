@@ -25,6 +25,10 @@ main{padding:12px 10px 148px;max-width:100vw}
 .p{font-size:16px;font-weight:800;color:var(--hijau);text-align:right;letter-spacing:.2px}
 .d{font-size:11px;color:#6f7b74;text-align:right;margin-top:2px}
 .rowi{display:flex;justify-content:space-between;align-items:center;gap:8px}
+#toast{position:fixed;left:12px;right:12px;bottom:84px;background:#22302a;color:#fff;border-radius:12px;padding:10px 12px;display:none;align-items:center;gap:10px;font-size:13.5px;z-index:30;box-shadow:0 8px 24px rgba(0,0,0,.22)}
+#toast.on{display:flex}
+#toast span{flex:1}
+#toast button{border:0;background:rgba(255,255,255,.18);color:#fff;border-radius:9px;padding:7px 11px;font-size:13px;font-weight:700}
 .empty{padding:28px 18px;text-align:center;color:var(--muted);font-size:14.5px;line-height:1.5}
 #cartbar{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.97);backdrop-filter:blur(6px);border-top:1px solid var(--line);padding:10px 12px calc(10px + env(safe-area-inset-bottom));display:flex;gap:8px;align-items:center;z-index:20;box-shadow:0 -4px 18px rgba(20,40,28,.06)}
 #cartbar .tot{flex:1;font-size:12px;color:var(--muted);line-height:1.2}
@@ -75,6 +79,7 @@ label{display:block;font-size:12px;color:#555;margin:8px 0 3px}
 </header>
 
 <main id="list"></main>
+<div id="toast"><span id="toastMsg"></span><button id="toastUndo">Batalkan</button></div>
 
 <div id="cartbar">
   <div class="tot"><span id="ctext">Keranjang kosong</span><b id="ctotal">Rp 0</b></div>
@@ -104,6 +109,7 @@ label{display:block;font-size:12px;color:#555;margin:8px 0 3px}
   <label>Uang diterima (Rp)</label>
   <input id="payCash" inputmode="numeric" placeholder="cth: 50000">
   <div class="tot2" style="margin-top:8px"><span>Kembalian</span><b id="payChange">Rp 0</b></div>
+  <div id="payWarn" style="display:none;margin-top:8px;font-size:13px;color:#b00;font-weight:700"></div>
   <div class="acts"><button id="paySave">Simpan &amp; Struk</button><button id="payCancel" class="grey">Batal</button></div>
 </div></div>
 
@@ -191,12 +197,31 @@ $('list').addEventListener('click', e=>{
   $('mItem').classList.add('on');
 });
 
+let undoFn = null, undoTimer = null;
+function showToast(msg, fn){
+  undoFn = fn || null;
+  $('toastMsg').textContent = msg;
+  $('toastUndo').style.display = fn ? 'block' : 'none';
+  $('toast').classList.add('on');
+  clearTimeout(undoTimer);
+  undoTimer = setTimeout(()=>{ $('toast').classList.remove('on'); undoFn=null; }, 4000);
+}
+$('toastUndo').addEventListener('click', ()=>{
+  if(undoFn) undoFn();
+  undoFn = null; $('toast').classList.remove('on'); renderCart();
+});
+
 function addToCart(it, size, qty){
   const key = it.nama + '|' + (size.u||'');
   const found = CART.find(c=> c.key===key);
   if(found) found.qty += qty;
   else CART.push({key, nama:it.nama, ukuran:size.u||'', harga:size.j1, modal:size.m, qty});
   saveCart(); renderCart();
+  showToast(it.nama + (size.u? ' ('+size.u+')':'') + ' masuk keranjang', ()=>{
+    const f = CART.find(c=>c.key===key);
+    if(f){ f.qty -= qty; if(f.qty<=0) CART.splice(CART.indexOf(f),1); }
+    saveCart();
+  });
 }
 
 $('iAdd').addEventListener('click', ()=>{
@@ -227,14 +252,21 @@ $('btnPay').addEventListener('click', ()=>{
   const total = CART.reduce((a,c)=> a + c.harga*c.qty, 0);
   $('payTotal').textContent = rp(total);
   $('payCash').value = '';
-  $('payChange').textContent = rp(0);
+  refreshPay();
   $('mPay').classList.add('on');
 });
-$('payCash').addEventListener('input', ()=>{
-  const total = CART.reduce((a,c)=> a + c.harga*c.qty, 0);
-  const cash = Number(String($('payCash').value).replace(/[^0-9]/g,''))||0;
-  $('payChange').textContent = rp(Math.max(0, cash-total));
-});
+function totals(){ return CART.reduce((a,c)=> a + c.harga*c.qty, 0); }
+function cashNow(){ return Number(String($('payCash').value).replace(/[^0-9]/g,''))||0; }
+function refreshPay(){
+  const total = totals(), cash = cashNow();
+  const kurang = cash > 0 && cash < total;
+  $('payChange').textContent = rp(cash ? Math.max(0, cash-total) : 0);
+  $('payWarn').style.display = kurang ? 'block' : 'none';
+  $('payWarn').textContent = kurang ? ('Uang kurang ' + rp(total-cash) + ' — transaksi belum bisa disimpan.') : '';
+  $('paySave').disabled = kurang;
+  $('paySave').style.opacity = kurang ? .5 : 1;
+}
+$('payCash').addEventListener('input', refreshPay);
 $('payCancel').addEventListener('click', ()=> $('mPay').classList.remove('on'));
 
 function nowWIB(){
@@ -248,7 +280,8 @@ function trxId(){ const d=new Date(); return 'T'+d.getFullYear()+String(d.getMon
 $('paySave').addEventListener('click', async ()=>{
   const t = nowWIB();
   const total = CART.reduce((a,c)=> a + c.harga*c.qty, 0);
-  const cash = Number(String($('payCash').value).replace(/[^0-9]/g,''))||0;
+  const cash = cashNow();
+  if(cash > 0 && cash < total){ alert('Uang diterima kurang ' + rp(total-cash) + '. Transaksi dibatalkan.'); return; }
   const trx = {
     id: trxId(), tanggal: t.tanggal, jam: t.jam, iso: t.iso,
     items: CART.map(c=>({nama:c.nama, ukuran:c.ukuran, qty:c.qty, harga:c.harga, modal:c.modal||0, subtotal:c.harga*c.qty})),
