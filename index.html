@@ -192,6 +192,7 @@ const rp = n => 'Rp ' + Number(n||0).toLocaleString('id-ID');
 const norm = s => String(s).toLowerCase().replace(/asi|asy|asoi|aoy|ampua/g,'asoy').replace(/[^a-z0-9 ]/g,' ');
 
 let ITEMS = BASE.slice(), CART = [], pickItem = null, CACHE_TRX = [];
+let SRC = { src:"file", n:BASE.length, at:"" };
 let HURL = localStorage.getItem(KEYH) || '';
 let KURL = localStorage.getItem(KEYK) || '';
 
@@ -205,7 +206,9 @@ function renderList(filter){
     const hay = norm(it.nama + ' ' + (it.sizes||[]).map(s=>s.u).join(' ') + ' ' + (it.ket||''));
     return f.every(w=> hay.includes(w));
   });
-  $('hint').textContent = out.length + ' barang';
+  const tag = SRC.src === 'sheet' ? ('Sheet ' + (SRC.at ? '@' + SRC.at : '')) : 'file bawaan';
+  $('hint').innerHTML = out.length + ' barang &middot; ' + tag +
+    (HURL ? ' <span style="text-decoration:underline">muat ulang</span>' : '');
   if(!out.length){ $('list').innerHTML = '<div class="empty">Barang tidak ditemukan.</div>'; return; }
   $('list').innerHTML = out.map((it,i)=>{
     const s0 = (it.sizes||[])[0] || {u:'', j1:0};
@@ -639,10 +642,17 @@ async function loadItemsFromSheet(){
     const arr = await r.json();
     if(Array.isArray(arr) && arr.length){
       ITEMS = arr.map(it=>({nama: it.nama, ket: it.ket||'', sizes: (it.sizes||[]).map(s=>({u:s.u, m:(s.m!=null? s.m : null), j1:s.j1}))}));
-      renderList('');
+      SRC = { src:'sheet', n:ITEMS.length, at:new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}) };
+      renderList($('q').value);
     }
-  }catch(e){}
+  }catch(e){ $('hint').innerHTML = 'gagal ambil data Sheet - pakai data terakhir di HP'; }
 }
+
+$('hint').addEventListener('click', async ()=>{
+  if(!HURL) return;
+  $('hint').textContent = 'memuat...';
+  await loadItemsFromSheet();
+});
 
 $('q').addEventListener('input', ()=> renderList($('q').value));
 $('q').addEventListener('input', ()=> renderList($('q').value));
