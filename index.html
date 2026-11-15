@@ -597,11 +597,13 @@ async function hapusTrx(id){
   if(!confirm('Hapus transaksi ' + id + '?')) return;
   if(!KURL){ alert('URL kasir belum diisi.'); return; }
   try{
-    await fetch(KURL, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({action:'hapus', id:id})});
+    const res = await fetch(KURL, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({action:'hapus', id:id})});
+    const balas = (await res.text().catch(()=> '')).slice(0,140);
     await loadRekap();
-    const masih = RK.some(x=> String(x.id) === String(id));
+    const masih = CACHE_TRX.some(x=> String(x.id) === String(id));
     if(masih){
-      alert('Transaksi BELUM terhapus.\n\nPenyebab: skrip di Sheet masih versi lama (belum bisa menghapus).\nPerbaiki sekali saja:\n1. Buka Sheet KASIR TOKO WIJAYA > Extensions > Apps Script\n2. Hapus isi, tempel file apps_script_kasir.gs yang baru > Ctrl+S\n3. Deploy > Manage deployments > ikon pensil > Version: New version > Deploy');
+      alert('Transaksi BELUM terhapus.\n\nBalasan server:\n' + (balas || '(kosong)') +
+        '\n\nArtinya URL /exec yang dipakai app masih menjalankan skrip LAMA.');
     } else {
       alert('Transaksi ' + id + ' sudah dihapus.');
     }
@@ -611,7 +613,7 @@ async function hapusTrx(id){
 // ===== pengaturan =====
 $('cfg').addEventListener('click', ()=>{
   $('fHarga').value = HURL; $('fKasir').value = KURL;
-  $('cfgMsg').textContent = (KURL? 'Kasir tersambung.' : 'URL kasir belum diisi.');
+  $('cfgMsg').textContent = (KURL? 'Kasir tersambung.' : 'URL kasir belum diisi.') + ' · app v4';
   $('mCfg').classList.add('on');
 });
 $('cfgClose').addEventListener('click', ()=> $('mCfg').classList.remove('on'));
