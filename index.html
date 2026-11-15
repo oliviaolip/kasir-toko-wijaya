@@ -115,6 +115,9 @@ label{display:block;font-size:12px;color:#555;margin:8px 0 3px}
 <div class="mask" id="mPay"><div class="sheet">
   <h2>Pembayaran</h2>
   <div class="tot2"><span>Total belanja</span><b id="payTotal">Rp 0</b></div>
+  <label>Nama pelanggan (boleh dikosongkan)</label>
+  <input id="payCust" list="custList" placeholder="cth: Bu Ani" autocomplete="off">
+  <datalist id="custList"></datalist>
   <label>Uang diterima (Rp)</label>
   <input id="payCash" inputmode="numeric" placeholder="cth: 50000">
   <div class="tot2" style="margin-top:8px"><span>Kembalian</span><b id="payChange">Rp 0</b></div>
@@ -143,7 +146,7 @@ label{display:block;font-size:12px;color:#555;margin:8px 0 3px}
   <div class="tot2"><span>Tanggal</span><input id="rDate" type="date" style="width:auto;font-size:14px;padding:5px 8px"></div>
   <div id="rkCrumb" style="font-size:12.5px;color:#6f7b74;margin:8px 0 2px"></div>
   <div id="rekapBody" style="margin-top:6px"></div>
-  <div class="acts"><button id="rkDelDay" class="red">Hapus rekap tanggal ini</button><button id="rkClose" class="grey">Tutup</button></div>
+  <div class="acts"><button id="rkWa">Kirim ke WhatsApp</button><button id="rkDelDay" class="red">Hapus rekap tanggal ini</button><button id="rkClose" class="grey">Tutup</button></div>
 </div></div>
 
 <script>
@@ -153,7 +156,7 @@ const $ = id => document.getElementById(id);
 const rp = n => 'Rp ' + Number(n||0).toLocaleString('id-ID');
 const norm = s => String(s).toLowerCase().replace(/asi|asy|asoi|aoy|ampua/g,'asoy').replace(/[^a-z0-9 ]/g,' ');
 
-let ITEMS = BASE.slice(), CART = [], pickItem = null;
+let ITEMS = BASE.slice(), CART = [], pickItem = null, CACHE_TRX = [];
 let HURL = localStorage.getItem(KEYH) || '';
 let KURL = localStorage.getItem(KEYK) || '';
 
@@ -262,6 +265,9 @@ $('btnPay').addEventListener('click', ()=>{
   const total = CART.reduce((a,c)=> a + c.harga*c.qty, 0);
   $('payTotal').textContent = rp(total);
   $('payCash').value = '';
+  $('payCust').value = '';
+  const names = [...new Set(RK.concat(CACHE_TRX).map(x=> x.customer || 'Umum'))].filter(n=> n && n !== 'Umum').sort();
+  $('custList').innerHTML = names.map(n=>'<option value="'+n+'">').join('');
   refreshPay();
   $('mPay').classList.add('on');
 });
@@ -292,8 +298,9 @@ $('paySave').addEventListener('click', async ()=>{
   const total = CART.reduce((a,c)=> a + c.harga*c.qty, 0);
   const cash = cashNow();
   if(cash > 0 && cash < total){ alert('Uang diterima kurang ' + rp(total-cash) + '. Transaksi dibatalkan.'); return; }
+  const cust = ($('payCust').value || '').trim() || 'Umum';
   const trx = {
-    id: trxId(), tanggal: t.tanggal, jam: t.jam, iso: t.iso,
+    id: trxId(), tanggal: t.tanggal, jam: t.jam, iso: t.iso, customer: cust,
     items: CART.map(c=>({nama:c.nama, ukuran:c.ukuran, qty:c.qty, harga:c.harga, modal:c.modal||0, subtotal:c.harga*c.qty})),
     total, bayar: cash||total, kembali: Math.max(0,(cash||total)-total)
   };
@@ -315,6 +322,7 @@ function showReceipt(trx){
   lines.push('==============================');
   lines.push(trx.id);
   lines.push(trx.tanggal + ' ' + trx.jam);
+  if(trx.customer && trx.customer !== 'Umum') lines.push('Pelanggan: ' + trx.customer);
   lines.push('------------------------------');
   trx.items.forEach(it=>{
     lines.push(it.nama + (it.ukuran? ' ('+it.ukuran+')':''));
@@ -354,7 +362,7 @@ $('tabRekap').addEventListener('click', async ()=>{
     const d=new Date();
     $('rDate').value = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   }
-  rkHour = null; rkMin = null;
+  rkHour = null; rkMin = null; rkCust = null;
   await loadRekap();
 });
 $('rkClose').addEventListener('click', ()=>{
@@ -362,9 +370,9 @@ $('rkClose').addEventListener('click', ()=>{
   $('tabKasir').classList.add('on'); $('tabRekap').classList.remove('on');
   $('q').style.display=''; $('list').style.display=''; renderList($('q').value);
 });
-$('rDate').addEventListener('change', ()=>{ rkHour=null; rkMin=null; loadRekap(); });
+$('rDate').addEventListener('change', ()=>{ rkHour=null; rkMin=null; rkCust=null; loadRekap(); });
 
-let RK = [], rkHour = null, rkMin = null;
+let RK = [], rkHour = null, rkMin = null, rkCust = null;
 
 function hms(t){
   const p = String(t||'').replace(/\./g,':').split(':').map(x=>String(x).padStart(2,'0'));
@@ -381,17 +389,45 @@ async function loadRekap(){
   try{
     const r = await fetch(KURL + (KURL.includes('?')?'&':'?') + 't=' + Date.now());
     const all = await r.json();
-    RK = (Array.isArray(all)? all : []).filter(x=> x.tanggal === tglKey());
+    CACHE_TRX = Array.isArray(all)? all : [];
+    RK = CACHE_TRX.filter(x=> x.tanggal === tglKey());
     renderRekap();
   }catch(e){
     box.innerHTML = '<div class="empty">Gagal memuat. Cek internet / URL kasir.</div>';
   }
 }
 
+function custAgg(rows){
+  const o = {};
+  rows.forEach(x=>{
+    const c = x.customer || 'Umum';
+    o[c] = o[c] || {n:0, t:0};
+    o[c].n++; o[c].t += Number(x.total||0);
+  });
+  return o;
+}
+
 function renderRekap(){
   const box = $('rekapBody'), crumb = $('rkCrumb');
   const omzet = RK.reduce((a,x)=> a + Number(x.total||0), 0);
   $('rkDelDay').style.display = rkHour ? 'none' : 'block';
+
+  if(rkCust){
+    const inC = RK.filter(x=> (x.customer||'Umum') === rkCust);
+    const omc = inC.reduce((a,x)=> a + Number(x.total||0), 0);
+    crumb.innerHTML = '<button class="backb" data-back="3">\u2039 semua</button> Pelanggan: '+rkCust;
+    box.innerHTML =
+      '<div class="tot2"><span>Transaksi</span><b>'+inC.length+'</b></div>'+
+      '<div class="tot2"><span>Total belanja</span><b>'+rp(omc)+'</b></div>'+
+      '<div class="dhead">Rincian</div>'+
+      inC.slice().sort((a,b)=> String(a.jam).localeCompare(String(b.jam))).map(x=>{
+        const isi = (x.items||[]).map(i=> i.qty+'x '+i.nama+(i.ukuran?' ('+i.ukuran+')':'')).join(', ');
+        return '<div class="trx"><div class="trxTop"><span>'+x.jam+' &middot; '+x.id+'</span><span>'+rp(x.total)+'</span></div>'+
+               '<div class="trxSub">'+isi+'</div>'+
+               '<button class="delb" data-del="'+x.id+'">Hapus transaksi ini</button></div>';
+      }).join('');
+    return;
+  }
 
   if(!rkHour && !rkMin){
     crumb.textContent = tglKey() + ' \u00b7 semua jam';
@@ -405,6 +441,10 @@ function renderRekap(){
     box.innerHTML =
       '<div class="tot2"><span>Jumlah transaksi</span><b>'+RK.length+'</b></div>'+
       '<div class="tot2"><span>Omzet</span><b>'+rp(omzet)+'</b></div>'+
+      '<div class="dhead">Per pelanggan (ketuk untuk rincian)</div>'+
+      Object.keys(custAgg(RK)).sort().map(c=>
+        '<div class="drill" data-c="'+c+'"><span>'+c+'</span><span class="rgt"><i>'+custAgg(RK)[c].n+' trx</i> '+rp(custAgg(RK)[c].t)+'</span></div>'
+      ).join('')+
       '<div class="dhead">Per jam (ketuk untuk per menit)</div>'+
       Object.keys(per).sort().map(h=>
         '<div class="drill" data-h="'+h+'"><span>Jam '+h+'</span><span class="rgt"><i>'+per[h].n+' trx</i> '+rp(per[h].t)+'</span></div>'
@@ -449,6 +489,8 @@ function renderRekap(){
 }
 
 $('rekapBody').addEventListener('click', e=>{
+  const c = e.target.closest('[data-c]');
+  if(c){ rkCust = c.dataset.c; rkHour = null; rkMin = null; renderRekap(); return; }
   const h = e.target.closest('[data-h]'), m = e.target.closest('[data-m]');
   if(h){ rkHour = h.dataset.h; rkMin = null; renderRekap(); return; }
   if(m){ rkMin = m.dataset.m; renderRekap(); return; }
@@ -458,9 +500,37 @@ $('rekapBody').addEventListener('click', e=>{
 $('rkCrumb').addEventListener('click', e=>{
   const b = e.target.closest('[data-back]');
   if(!b) return;
-  if(b.dataset.back === '1'){ rkHour = null; rkMin = null; }
+  if(b.dataset.back === '3'){ rkCust = null; rkHour = null; rkMin = null; }
+  else if(b.dataset.back === '1'){ rkHour = null; rkMin = null; }
   else { rkMin = null; }
   renderRekap();
+});
+
+function rekapWA(){
+  const omzet = RK.reduce((a,x)=> a + Number(x.total||0), 0);
+  const agg = custAgg(RK);
+  let t = '*REKAP TOKO WIJAYA*\n' + tglKey() + '\n';
+  t += '------------------------\n';
+  t += 'Transaksi : ' + RK.length + '\n';
+  t += 'Omzet     : ' + rp(omzet) + '\n';
+  if(RK.length){
+    t += '------------------------\n*Per pelanggan*\n';
+    Object.keys(agg).sort().forEach(c=>{ t += '- ' + c + ': ' + agg[c].n + 'x, ' + rp(agg[c].t) + '\n'; });
+    const bar = {};
+    RK.forEach(x=> (x.items||[]).forEach(i=>{
+      const k = i.nama + (i.ukuran? ' ('+i.ukuran+')':'');
+      bar[k] = (bar[k]||0) + Number(i.qty||0);
+    }));
+    t += '------------------------\n*Barang terjual*\n';
+    Object.keys(bar).sort().forEach(k=>{ t += '- ' + k + ': ' + bar[k] + '\n'; });
+  } else {
+    t += '\nBelum ada transaksi.';
+  }
+  return t;
+}
+$('rkWa').addEventListener('click', ()=>{
+  const teks = rekapWA();
+  window.open('https://wa.me/?text=' + encodeURIComponent(teks), '_blank');
 });
 
 $('rkDelDay').addEventListener('click', async ()=>{
