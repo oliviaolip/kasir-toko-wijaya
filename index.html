@@ -150,6 +150,8 @@ label{display:block;font-size:12px;color:#555;margin:8px 0 3px}
 <div class="mask" id="mPay"><div class="sheet">
   <h2>Pembayaran</h2>
   <div class="tot2"><span>Total belanja</span><b id="payTotal">Rp 0</b></div>
+  <label>Tanggal transaksi</label>
+  <input id="payDate" type="date">
   <label>Nama pelanggan (boleh dikosongkan)</label>
   <input id="payCust" list="custList" placeholder="cth: Bu Ani" autocomplete="off">
   <datalist id="custList"></datalist>
@@ -304,6 +306,8 @@ $('btnPay').addEventListener('click', ()=>{
   $('payTotal').textContent = rp(total);
   $('payCash').value = '';
   $('payCust').value = '';
+  const dd = new Date();
+  $('payDate').value = dd.getFullYear()+'-'+String(dd.getMonth()+1).padStart(2,'0')+'-'+String(dd.getDate()).padStart(2,'0');
   const names = [...new Set(RK.concat(CACHE_TRX).map(x=> x.customer || 'Umum'))].filter(n=> n && n !== 'Umum').sort();
   $('custList').innerHTML = names.map(n=>'<option value="'+n+'">').join('');
   refreshPay();
@@ -323,22 +327,28 @@ function refreshPay(){
 $('payCash').addEventListener('input', refreshPay);
 $('payCancel').addEventListener('click', ()=> $('mPay').classList.remove('on'));
 
-function nowWIB(){
+function nowWIB(dateStr){
   const d = new Date();
-  return { tanggal: d.toLocaleDateString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric'}),
+  const tgl = dateStr ? (dateStr.split('-')[2]+'/'+dateStr.split('-')[1]+'/'+dateStr.split('-')[0])
+                      : d.toLocaleDateString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric'});
+  return { tanggal: tgl,
            jam: d.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}),
            iso: d.toISOString() };
 }
-function trxId(){ const d=new Date(); return 'T'+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')+'-'+String(Math.floor(Math.random()*9000)+1000); }
+function trxId(dateStr){
+  const d = dateStr ? new Date(dateStr+'T00:00:00') : new Date();
+  return 'T'+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0')+'-'+String(Math.floor(Math.random()*9000)+1000);
+}
 
 $('paySave').addEventListener('click', async ()=>{
-  const t = nowWIB();
+  const pdate = $('payDate').value;
+  const t = nowWIB(pdate);
   const total = CART.reduce((a,c)=> a + c.harga*c.qty, 0);
   const cash = cashNow();
   if(cash > 0 && cash < total){ alert('Uang diterima kurang ' + rp(total-cash) + '. Transaksi dibatalkan.'); return; }
   const cust = ($('payCust').value || '').trim() || 'Umum';
   const trx = {
-    id: trxId(), tanggal: t.tanggal, jam: t.jam, iso: t.iso, customer: cust,
+    id: trxId(pdate), tanggal: t.tanggal, jam: t.jam, iso: t.iso, customer: cust,
     items: CART.map(c=>({nama:c.nama, ukuran:c.ukuran, qty:c.qty, harga:c.harga, modal:c.modal||0, subtotal:c.harga*c.qty})),
     total, bayar: cash||total, kembali: Math.max(0,(cash||total)-total)
   };
