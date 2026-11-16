@@ -591,68 +591,6 @@ function esc(s){
   return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function xmlExcel(){
-  const rows = barisEkspor();
-  const om = RK.reduce((a,x)=> a + Number(x.total||0), 0);
-  const head = ['Tanggal','Jam','Pelanggan','Barang','Qty','Harga','Subtotal','ID Transaksi'];
-  let x = '<?xml version="1.0"?>\n<?mso-application progid="Excel.Sheet"?>\n';
-  x += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">';
-  x += '<Styles><Style ss:ID="h"><Font ss:Bold="1"/><Interior ss:Color="#D9EAD3" ss:Pattern="Solid"/></Style>';
-  x += '<Style ss:ID="n"><NumberFormat ss:Format="#,##0"/></Style></Styles>';
-  x += '<Worksheet ss:Name="Rekap"><Table>';
-  x += '<Row><Cell ss:StyleID="h"><Data ss:Type="String">REKAP PENJUALAN TOKO WIJAYA</Data></Cell></Row>';
-  x += '<Row><Cell><Data ss:Type="String">'+esc(bulanLabel())+'</Data></Cell></Row>';
-  x += '<Row><Cell><Data ss:Type="String">Total transaksi</Data></Cell><Cell><Data ss:Type="Number">'+RK.length+'</Data></Cell></Row>';
-  x += '<Row><Cell><Data ss:Type="String">Omzet</Data></Cell><Cell ss:StyleID="n"><Data ss:Type="Number">'+om+'</Data></Cell></Row>';
-  x += '<Row></Row><Row>';
-  head.forEach(h=>{ x += '<Cell ss:StyleID="h"><Data ss:Type="String">'+esc(h)+'</Data></Cell>'; });
-  x += '</Row>';
-  rows.forEach(r=>{
-    x += '<Row>';
-    x += '<Cell><Data ss:Type="String">'+esc(r.tanggal)+'</Data></Cell>';
-    x += '<Cell><Data ss:Type="String">'+esc(r.jam)+'</Data></Cell>';
-    x += '<Cell><Data ss:Type="String">'+esc(r.pelanggan)+'</Data></Cell>';
-    x += '<Cell><Data ss:Type="String">'+esc(r.barang)+'</Data></Cell>';
-    x += '<Cell><Data ss:Type="Number">'+r.qty+'</Data></Cell>';
-    x += '<Cell ss:StyleID="n"><Data ss:Type="Number">'+r.harga+'</Data></Cell>';
-    x += '<Cell ss:StyleID="n"><Data ss:Type="Number">'+r.subtotal+'</Data></Cell>';
-    x += '<Cell><Data ss:Type="String">'+esc(r.trx)+'</Data></Cell>';
-    x += '</Row>';
-  });
-  x += '</Table></Worksheet></Workbook>';
-  return x;
-}
-
-function namaFile(ext){
-  return 'Rekap_Toko_Wijaya_' + bulanLabel().replace(/ /g,'_') + '.' + ext;
-}
-
-async function eksporExcel(){
-  const blob = new Blob(['\ufeff' + xmlExcel()], {type:'application/vnd.ms-excel'});
-  const file = new File([blob], namaFile('xls'), {type:'application/vnd.ms-excel'});
-  if(navigator.canShare && navigator.canShare({files:[file]})){
-    try{ await navigator.share({files:[file], title:'Rekap ' + bulanLabel(), text:'Rekap penjualan ' + bulanLabel()}); return; }catch(e){}
-  }
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = file.name; a.click();
-  setTimeout(()=> URL.revokeObjectURL(a.href), 4000);
-}
-
-async function eksporWA(){
-  const blob = new Blob(['\ufeff' + xmlExcel()], {type:'application/vnd.ms-excel'});
-  const file = new File([blob], namaFile('xls'), {type:'application/vnd.ms-excel'});
-  const teks = teksBulan();
-  if(navigator.canShare && navigator.canShare({files:[file]})){
-    try{
-      await navigator.share({files:[file], title:'Rekap ' + bulanLabel(), text:teks});
-      return;
-    }catch(e){}
-  }
-  window.open('https://wa.me/?text=' + encodeURIComponent(teks), '_blank');
-  alert('File Excel tidak bisa dilampirkan otomatis di browser ini.\nFile akan terunduh - lampirkan manual di WhatsApp, atau pakai tombol Excel lalu Bagikan.');
-  eksporExcel();
-}
-
 function teksBulan(){
   const om = RK.reduce((a,x)=> a + Number(x.total||0), 0);
   const agg = custAgg(RK);
@@ -669,106 +607,217 @@ function teksBulan(){
   return t;
 }
 
-function eksporPdf(){
+
+/* ================= FILE: xlsx asli (zip store) ================= */
+const CRCT = (()=>{ const t=new Uint32Array(256);
+  for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c = c&1 ? (0xEDB88320 ^ (c>>>1)) : (c>>>1); t[n]=c>>>0; }
+  return t; })();
+function crc32(buf){ let c=0xFFFFFFFF; for(let i=0;i<buf.length;i++) c = CRCT[(c ^ buf[i]) & 0xFF] ^ (c>>>8);
+  return (c ^ 0xFFFFFFFF) >>> 0; }
+function enc(s){ return new TextEncoder().encode(s); }
+function zipStore(files){
+  const parts=[], central=[]; let offset=0;
+  files.forEach(f=>{
+    const name=enc(f.name), data=f.data, crc=crc32(data), size=data.length;
+    const lh=new Uint8Array(30+name.length), dv=new DataView(lh.buffer);
+    dv.setUint32(0,0x04034b50,true); dv.setUint16(4,20,true); dv.setUint16(6,0,true);
+    dv.setUint16(8,0,true); dv.setUint16(10,0x21,true); dv.setUint16(12,0,true);
+    dv.setUint32(14,crc,true); dv.setUint32(18,size,true); dv.setUint32(22,size,true);
+    dv.setUint16(26,name.length,true); dv.setUint16(28,0,true);
+    lh.set(name,30);
+    parts.push(lh, data);
+    const cd=new Uint8Array(46+name.length), cv=new DataView(cd.buffer);
+    cv.setUint32(0,0x02014b50,true); cv.setUint16(4,20,true); cv.setUint16(6,20,true);
+    cv.setUint16(8,0,true); cv.setUint16(10,0,true); cv.setUint16(12,0x21,true); cv.setUint16(14,0,true);
+    cv.setUint32(16,crc,true); cv.setUint32(20,size,true); cv.setUint32(24,size,true);
+    cv.setUint16(28,name.length,true); cv.setUint16(30,0,true); cv.setUint16(32,0,true);
+    cv.setUint16(34,0,true); cv.setUint16(36,0,true); cv.setUint32(38,0,true);
+    cv.setUint32(42,offset,true); cd.set(name,46);
+    central.push(cd);
+    offset += lh.length + data.length;
+  });
+  const csize = central.reduce((a,c)=> a+c.length, 0);
+  const eocd=new Uint8Array(22), ev=new DataView(eocd.buffer);
+  ev.setUint32(0,0x06054b50,true); ev.setUint16(8,files.length,true); ev.setUint16(10,files.length,true);
+  ev.setUint32(12,csize,true); ev.setUint32(16,offset,true);
+  const all=[...parts,...central,eocd];
+  const out=new Uint8Array(all.reduce((a,x)=> a+x.length,0)); let p2=0;
+  all.forEach(x=>{ out.set(x,p2); p2+=x.length; });
+  return out;
+}
+function xEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function buatXlsx(){
   const rows = barisEkspor();
   const om = RK.reduce((a,x)=> a + Number(x.total||0), 0);
-  const w = window.open('', '_blank');
-  if(!w){ alert('Popup diblokir. Izinkan popup lalu coba lagi.'); return; }
-  let h = '<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rekap ' + bulanLabel() + '</title>';
-  h += '<style>body{font-family:system-ui,Arial;padding:16px;color:#111}h1{font-size:18px;margin:0 0 2px}';
-  h += '.sub{color:#555;font-size:12px;margin-bottom:12px}table{width:100%;border-collapse:collapse;font-size:11px}';
-  h += 'th{background:#e8f3ec;text-align:left;padding:6px;border:1px solid #cfe0d6}td{padding:6px;border:1px solid #dde5e0}';
-  h += '.n{text-align:right}.tot{margin-top:12px;font-size:14px;font-weight:700}</style></head><body>';
-  h += '<h1>REKAP PENJUALAN TOKO WIJAYA</h1><div class="sub">' + bulanLabel() + ' &middot; dicetak ' + new Date().toLocaleString('id-ID') + '</div>';
-  h += '<table><thead><tr><th>Tanggal</th><th>Jam</th><th>Pelanggan</th><th>Barang</th><th class="n">Qty</th><th class="n">Harga</th><th class="n">Subtotal</th></tr></thead><tbody>';
-  rows.forEach(r=>{
-    h += '<tr><td>'+esc(r.tanggal)+'</td><td>'+esc(r.jam)+'</td><td>'+esc(r.pelanggan)+'</td><td>'+esc(r.barang)+
-         '</td><td class="n">'+r.qty+'</td><td class="n">'+rp(r.harga)+'</td><td class="n">'+rp(r.subtotal)+'</td></tr>';
+  const head = ['Tanggal','Jam','Pelanggan','Barang','Qty','Harga','Subtotal','ID Transaksi'];
+  let body = '';
+  const row = (cells)=> '<row>' + cells.map(c=>{
+      if(c && typeof c === 'object') return '<c t="inlineStr"><is><t>'+xEsc(c.s)+'</t></is></c>';
+      const n = Number(c);
+      return (c!=='' && !isNaN(n)) ? '<c><v>'+n+'</v></c>' : '<c t="inlineStr"><is><t>'+xEsc(c)+'</t></is></c>';
+    }).join('') + '</row>';
+  body += row(['REKAP PENJUALAN TOKO WIJAYA']);
+  body += row([bulanLabel()]);
+  body += row(['Total transaksi', String(RK.length)]);
+  body += row(['Omzet', String(om)]);
+  body += row(['']);
+  body += row(head);
+  rows.forEach(r=> body += row([r.tanggal, r.jam, r.pelanggan, r.barang, String(r.qty), String(r.harga), String(r.subtotal), r.trx]));
+
+  const sheet = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+    + '<sheetData>' + body + '</sheetData></worksheet>';
+  const files = [
+    { name:'[Content_Types].xml', data: enc('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        + '<Default Extension="xml" ContentType="application/xml"/>'
+        + '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+        + '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+        + '</Types>') },
+    { name:'_rels/.rels', data: enc('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+        + '</Relationships>') },
+    { name:'xl/workbook.xml', data: enc('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        + '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        + 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        + '<sheets><sheet name="Rekap" sheetId="1" r:id="rId1"/></sheets></workbook>') },
+    { name:'xl/_rels/workbook.xml.rels', data: enc('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
+        + '</Relationships>') },
+    { name:'xl/worksheets/sheet1.xml', data: enc(sheet) }
+  ];
+  return zipStore(files);
+}
+
+/* ================= FILE: pdf asli ================= */
+function pdfEsc(s){
+  let o = '';
+  String(s==null?'':s).split('').forEach(function(ch){
+    if(ch === String.fromCharCode(92)) o += String.fromCharCode(92,92);
+    else if(ch === '(') o += String.fromCharCode(92) + '(';
+    else if(ch === ')') o += String.fromCharCode(92) + ')';
+    else o += ch;
   });
-  h += '</tbody></table><div class="tot">Transaksi: ' + RK.length + ' &middot; Omzet: ' + rp(om) + '</div>';
-  h += '<script>window.onload=function(){setTimeout(function(){window.print()},350)}<\/script></body></html>';
-  w.document.write(h); w.document.close();
+  return o;
 }
+function buatPdf(){
+  const rows = barisEkspor();
+  const om = RK.reduce((a,x)=> a + Number(x.total||0), 0);
+  const W=842, H=595, M=28;           // A4 landscape
+  const cols=[[M,'Tanggal',62],[M+64,'Jam',54],[M+120,'Pelanggan',96],[M+218,'Barang',250],[M+470,'Qty',30],[M+502,'Harga',72],[M+576,'Subtotal',80]];
+  const perPage = 34;
+  const pages = Math.max(1, Math.ceil(rows.length / perPage));
+  let objs = [], contentIds = [];
 
-function rkTrxCard(x){
-  const t = hms(x.jam);
-  const isi = (x.items||[]).map(i=>
-    '<li><b>'+i.qty+'x</b> '+i.nama+(i.ukuran? ' <span style="color:#8a948e">&middot; '+i.ukuran+'</span>':'')+
-    ' <span style="float:right;color:#4c574f">'+rp(Number(i.qty||0)*Number(i.harga||0))+'</span></li>').join('');
-  return '<div class="trxCard">'+
-    '<div class="top"><span class="tm">'+String(x.jam||'')+'</span><span class="tot">'+rp(x.total)+'</span></div>'+
-    '<div class="who">'+(x.customer || 'Umum')+'</div>'+
-    '<ul>'+isi+'</ul>'+
-    '<button class="delLink" data-del="'+x.id+'">Hapus transaksi ini</button>'+
-  '</div>';
-}
+  const header = (pg)=>{
+    let t = 'BT /F1 13 Tf ' + M + ' ' + (H-40) + ' Td (REKAP PENJUALAN TOKO WIJAYA) Tj ET\n';
+    t += 'BT /F1 9 Tf ' + M + ' ' + (H-56) + ' Td (' + pdfEsc(bulanLabel() + '  |  dicetak ' + new Date().toLocaleString('id-ID')) + ') Tj ET\n';
+    t += 'BT /F1 8 Tf ' + M + ' ' + (H-74) + ' Td (Hal ' + pg + '/' + pages + ') Tj ET\n';
+    let y = H-92;
+    cols.forEach(c=>{ t += 'BT /F1 8 Tf ' + c[0] + ' ' + y + ' Td (' + pdfEsc(c[1]) + ') Tj ET\n'; });
+    t += '0.7 w ' + M + ' ' + (y-4) + ' m ' + (W-M) + ' ' + (y-4) + ' l S\n';
+    return t;
+  };
 
-function renderRekap(){
-  const box = $('rekapBody'), crumb = $('rkCrumb');
-  $('rkDelDay').style.display = (rkHour || rkCust || rkPer === 'bulan')? 'none' : 'block';
-  $('rkWa').style.display = (rkPer === 'bulan')? 'none' : 'block';
-  if(rkPer === 'bulan'){ renderBulan(); return; }
-  $('rkDelDay').style.display = (rkHour || rkCust || rkPer === 'bulan')? 'none' : 'block';
-  $('rkWa').style.display = (rkPer === 'bulan')? 'none' : 'block';
-  crumb.innerHTML = '';
-
-  // ---- rincian per pelanggan ----
-  if(rkCust){
-    const inC = RK.filter(x=> (x.customer||'Umum') === rkCust)
-                  .sort((a,b)=> String(a.jam).localeCompare(String(b.jam)));
-    const omc = inC.reduce((a,x)=> a + Number(x.total||0), 0);
-    box.innerHTML =
-      '<button class="rkBack" data-back="3">&#8249; Semua pelanggan</button>'+
-      '<div class="rkHead"><span class="t">'+rkCust+'</span><span class="s">'+inC.length+' trx &middot; '+rp(omc)+'</span></div>'+
-      (inC.length? inC.map(rkTrxCard).join('') : '<div class="rkNote">Tidak ada transaksi.</div>');
-    return;
+  for(let pg=0; pg<pages; pg++){
+    let t = header(pg+1);
+    let y = H-108;
+    rows.slice(pg*perPage, (pg+1)*perPage).forEach(r=>{
+      t += 'BT /F1 7.5 Tf ' + cols[0][0] + ' ' + y + ' Td (' + pdfEsc(r.tanggal) + ') Tj ET\n';
+      t += 'BT /F1 7.5 Tf ' + cols[1][0] + ' ' + y + ' Td (' + pdfEsc(r.jam) + ') Tj ET\n';
+      t += 'BT /F1 7.5 Tf ' + cols[2][0] + ' ' + y + ' Td (' + pdfEsc(String(r.pelanggan).slice(0,18)) + ') Tj ET\n';
+      t += 'BT /F1 7.5 Tf ' + cols[3][0] + ' ' + y + ' Td (' + pdfEsc(String(r.barang).slice(0,44)) + ') Tj ET\n';
+      t += 'BT /F1 7.5 Tf ' + cols[4][0] + ' ' + y + ' Td (' + r.qty + ') Tj ET\n';
+      t += 'BT /F1 7.5 Tf ' + cols[5][0] + ' ' + y + ' Td (' + pdfEsc(rp(r.harga)) + ') Tj ET\n';
+      t += 'BT /F1 7.5 Tf ' + cols[6][0] + ' ' + y + ' Td (' + pdfEsc(rp(r.subtotal)) + ') Tj ET\n';
+      y -= 13;
+    });
+    if(pg === pages-1){
+      t += 'BT /F1 9 Tf ' + M + ' ' + (y-10) + ' Td (Transaksi: ' + RK.length + '   Omzet: ' + pdfEsc(rp(om)) + ') Tj ET\n';
+    }
+    contentIds.push(t);
   }
 
-  // ---- rincian dalam 1 jam (per menit) ----
-  if(rkHour && !rkMin){
-    const inHour = RK.filter(x=> hms(x.jam).h === rkHour)
-                     .sort((a,b)=> String(a.jam).localeCompare(String(b.jam)));
-    const om = inHour.reduce((a,x)=> a + Number(x.total||0), 0);
-    box.innerHTML =
-      '<button class="rkBack" data-back="1">&#8249; Ringkasan</button>'+
-      '<div class="rkHead"><span class="t">Jam '+rkHour+'</span><span class="s">'+inHour.length+' trx &middot; '+rp(om)+'</span></div>'+
-      inHour.map(rkTrxCard).join('');
-    return;
-  }
-
-  // ---- ringkasan tanggal ----
-  if(!RK.length){
-    box.innerHTML = rkCard(RK) + '<div class="rkNote">Belum ada transaksi tanggal ini.</div>';
-    return;
-  }
-
-  const agg = custAgg(RK);
-  const perJam = {};
-  RK.forEach(x=>{
-    const h = hms(x.jam).h;
-    perJam[h] = perJam[h] || {n:0, t:0};
-    perJam[h].n++; perJam[h].t += Number(x.total||0);
+  // objek: 1 catalog, 2 pages, 3 font, lalu (page, content) berpasangan
+  const kids = [];
+  objs[1] = '<< /Type /Catalog /Pages 2 0 R >>';
+  objs[3] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
+  let n = 4;
+  contentIds.forEach((t)=>{
+    const pid = n++, cid = n++;
+    const stream = '<< /Length ' + enc(t).length + ' >>\nstream\n' + t + 'endstream';
+    objs[pid] = '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + W + ' ' + H + '] /Resources << /Font << /F1 3 0 R >> >> /Contents ' + cid + ' 0 R >>';
+    objs[cid] = stream;
+    kids.push(pid + ' 0 R');
   });
+  objs[2] = '<< /Type /Pages /Count ' + kids.length + ' /Kids [' + kids.join(' ') + '] >>';
 
-  const listCust = Object.keys(agg).sort().map(c=>
-    '<div class="rkRow tap" data-c="'+c+'">'+
-      '<div><div class="nm">'+c+'</div><div class="sub">'+agg[c].n+' transaksi</div></div>'+
-      '<div style="display:flex;align-items:center"><span class="amt">'+rp(agg[c].t)+'</span><span class="chev">&#8250;</span></div>'+
-    '</div>').join('');
-
-  const listJam = Object.keys(perJam).sort().map(h=>
-    '<div class="rkRow tap" data-h="'+h+'">'+
-      '<div><div class="nm">Jam '+h+':00</div><div class="sub">'+perJam[h].n+' transaksi</div></div>'+
-      '<div style="display:flex;align-items:center"><span class="amt">'+rp(perJam[h].t)+'</span><span class="chev">&#8250;</span></div>'+
-    '</div>').join('');
-
-  box.innerHTML = rkCard(RK)+
-    '<div class="seg">'+
-      '<button data-seg="cust" class="'+(rkSeg==='cust'?'on':'')+'">Per pelanggan</button>'+
-      '<button data-seg="jam" class="'+(rkSeg==='jam'?'on':'')+'">Per jam</button>'+
-    '</div>'+
-    (rkSeg==='cust'? listCust : listJam);
+  let out = '%PDF-1.4\n';
+  const offs = [];
+  for(let i=1;i<objs.length;i++){
+    if(!objs[i]) continue;
+    offs[i] = enc(out).length;
+    out += i + ' 0 obj\n' + objs[i] + '\nendobj\n';
+  }
+  const xref = enc(out).length;
+  const max = objs.length;
+  out += 'xref\n0 ' + max + '\n0000000000 65535 f \n';
+  for(let i=1;i<max;i++){ out += (offs[i]!=null? String(offs[i]).padStart(10,'0') : '0000000000') + ' 00000 n \n'; }
+  out += 'trailer\n<< /Size ' + max + ' /Root 1 0 R >>\nstartxref\n' + xref + '\n%%EOF';
+  return enc(out);
 }
+
+async function bagikan(blob, nama, teks){
+  const file = new File([blob], nama, {type: blob.type});
+  if(navigator.canShare && navigator.canShare({files:[file]})){
+    try{ await navigator.share({files:[file], title: nama, text: teks || ''}); return true; }catch(e){ return false; }
+  }
+  return false;
+}
+function unduh(blob, nama){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = nama;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=> URL.revokeObjectURL(a.href), 5000);
+}
+
+async function eksporExcel(){
+  const blob = new Blob([buatXlsx()], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const nama = namaFile('xlsx');
+  if(await bagikan(blob, nama, 'Rekap ' + bulanLabel())) return;
+  unduh(blob, nama);
+}
+
+async function eksporPdf(){
+  const blob = new Blob([buatPdf()], {type:'application/pdf'});
+  const nama = namaFile('pdf');
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank');            // preview dulu
+  setTimeout(()=> unduh(blob, nama), 1200);  // lalu otomatis tersimpan
+  setTimeout(()=> URL.revokeObjectURL(url), 60000);
+}
+
+async function eksporWA(){
+  const xl = new Blob([buatXlsx()], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const pdf = new Blob([buatPdf()], {type:'application/pdf'});
+  const teks = teksBulan();
+  const f1 = new File([xl], namaFile('xlsx'), {type: xl.type});
+  const f2 = new File([pdf], namaFile('pdf'), {type: pdf.type});
+  if(navigator.canShare && navigator.canShare({files:[f1, f2]})){
+    try{ await navigator.share({files:[f1, f2], title:'Rekap ' + bulanLabel(), text: teks}); return; }catch(e){}
+  }
+  if(navigator.canShare && navigator.canShare({files:[f2]})){
+    try{ await navigator.share({files:[f2], title:'Rekap ' + bulanLabel(), text: teks}); return; }catch(e){}
+  }
+  window.open('https://wa.me/?text=' + encodeURIComponent(teks), '_blank');
+  unduh(xl, namaFile('xlsx'));
+  alert('File tidak bisa dilampirkan otomatis di browser ini.\nFile Excel sudah terunduh - lampirkan manual di WhatsApp.');
+}
+
 
 $('rekapBody').addEventListener('click', e=>{
   const day = e.target.closest('[data-day]');
