@@ -449,7 +449,7 @@ $('perHari').addEventListener('click', ()=>{
   rkHour=null; rkMin=null; rkCust=null; loadRekap();
 });
 $('perBulan').addEventListener('click', ()=>{
-  rkPer='bulan'; $('perBulan').classList.add('on'); $('perHari').classList.remove('on');
+  rkPer='bulan'; rkBSeg='hari'; $('perBulan').classList.add('on'); $('perHari').classList.remove('on');
   $('rowHari').style.display='none'; $('rowBulan').style.display='';
   if(!$('rMonth').value){
     const d = new Date();
@@ -458,7 +458,7 @@ $('perBulan').addEventListener('click', ()=>{
   rkHour=null; rkMin=null; rkCust=null; loadRekap();
 });
 
-let RK = [], rkHour = null, rkMin = null, rkCust = null, rkSeg = 'cust', RKTIME = '', rkPer = 'hari';
+let RK = [], rkHour = null, rkMin = null, rkCust = null, rkSeg = 'cust', RKTIME = '', rkPer = 'hari', rkBSeg = 'hari';
 
 function setNet(ok, ket){
   const n = $('net');
@@ -646,24 +646,29 @@ function renderBulan(){
       '<div style="display:flex;align-items:center"><span class="amt">'+rp(perDay[d].t)+'</span><span class="chev">&#8250;</span></div>'+
     '</div>').join('');
 
-  box.innerHTML = rkCard(RK, 'Omzet ' + bulanLabel()) +
-    '<div class="expRow">'+
-      '<button id="expXls">Excel</button>'+
-      '<button id="expPdf">PDF</button>'+
-      '<button id="expWa" class="pri">Kirim WA</button>'+
-    '</div>'+
-    (days.length? (
-        (()=>{ const agg = custAgg(RK);
-          const lc = Object.keys(agg).sort((a,b)=> agg[a].nama.localeCompare(agg[b].nama,'id')).map(c=>
-            '<div class="rkRow tap" data-c="'+agg[c].nama+'">'+
-              '<div><div class="nm">'+agg[c].nama+'</div><div class="sub">'+agg[c].n+' transaksi</div></div>'+
-              '<div style="display:flex;align-items:center"><span class="amt">'+rp(agg[c].t)+'</span><span class="chev">&#8250;</span></div>'+
-            '</div>').join('');
-          return '<div class="rkHead"><span class="t">Per pelanggan</span><span class="s">'+Object.keys(agg).length+' pelanggan</span></div>'+lc;
-        })()+
-        '<div class="rkHead"><span class="t">Per hari</span><span class="s">'+days.length+' hari</span></div>'+list
-      )
-      : '<div class="rkNote">Belum ada transaksi bulan ini.</div>');
+  const agg = custAgg(RK);
+    const listCust = Object.keys(agg).sort((a,b)=> agg[a].nama.localeCompare(agg[b].nama,'id')).map(c=>
+      '<div class="rkRow tap" data-c="'+agg[c].nama+'">'+
+        '<div><div class="nm">'+agg[c].nama+'</div><div class="sub">'+agg[c].n+' transaksi</div></div>'+
+        '<div style="display:flex;align-items:center"><span class="amt">'+rp(agg[c].t)+'</span><span class="chev">&#8250;</span></div>'+
+      '</div>').join('');
+
+    box.innerHTML = rkCard(RK, 'Omzet ' + bulanLabel()) +
+      '<div class="expRow">'+
+        '<button id="expXls">Excel</button>'+
+        '<button id="expPdf">PDF</button>'+
+        '<button id="expWa" class="pri">Kirim WA</button>'+
+      '</div>'+
+      (days.length? (
+          '<div class="seg">'+
+            '<button data-bseg="hari" class="'+(rkBSeg==='hari'?'on':'')+'">Per hari</button>'+
+            '<button data-bseg="cust" class="'+(rkBSeg==='cust'?'on':'')+'">Per pelanggan</button>'+
+          '</div>'+
+          (rkBSeg==='cust'
+            ? '<div class="rkHead"><span class="t">Per pelanggan</span><span class="s">'+Object.keys(agg).length+' pelanggan</span></div>'+listCust
+            : '<div class="rkHead"><span class="t">Per hari</span><span class="s">'+days.length+' hari</span></div>'+list)
+        )
+        : '<div class="rkNote">Belum ada transaksi bulan ini.</div>');
 
   $('expXls').addEventListener('click', ()=> eksporExcel());
   $('expPdf').addEventListener('click', ()=> eksporPdf());
@@ -703,9 +708,9 @@ function teksBulan(){
   t += 'Transaksi : ' + RK.length + '\nOmzet     : ' + rp(om) + '\n';
   if(RK.length){
     t += '------------------------\n*Per pelanggan*\n';
-    Object.keys(agg).sort().forEach(c=>{ t += '- ' + c + ': ' + agg[c].n + 'x, ' + rp(agg[c].t) + '\n'; });
-    t += '------------------------\n*Per hari*\n';
-    Object.keys(days).sort().forEach(d=>{ t += '- ' + d + ': ' + days[d].n + 'x, ' + rp(days[d].t) + '\n'; });
+        Object.keys(agg).sort((a,b)=> agg[a].nama.localeCompare(agg[b].nama,'id')).forEach(c=>{ t += '- ' + agg[c].nama + ': ' + agg[c].n + 'x, ' + rp(agg[c].t) + '\n'; });
+        t += '------------------------\n*Per hari*\n';
+        Object.keys(days).sort().forEach(d=>{ t += '- ' + d + ': ' + days[d].n + 'x, ' + rp(days[d].t) + '\n'; });
   }
   return t;
 }
@@ -953,6 +958,8 @@ $('rekapBody').addEventListener('click', e=>{
     $('perHari').click();
     return;
   }
+  const bseg = e.target.closest('[data-bseg]');
+  if(bseg){ rkBSeg = bseg.dataset.bseg; renderRekap(); return; }
   const seg = e.target.closest('[data-seg]');
   if(seg){ rkSeg = seg.dataset.seg; renderRekap(); return; }
   const c = e.target.closest('[data-c]');
@@ -979,8 +986,8 @@ function rekapWA(){
   t += 'Omzet     : ' + rp(omzet) + '\n';
   if(RK.length){
     t += '------------------------\n*Per pelanggan*\n';
-    Object.keys(agg).sort().forEach(c=>{ t += '- ' + c + ': ' + agg[c].n + 'x, ' + rp(agg[c].t) + '\n'; });
-    const bar = {};
+    Object.keys(agg).sort((a,b)=> agg[a].nama.localeCompare(agg[b].nama,'id')).forEach(c=>{ t += '- ' + agg[c].nama + ': ' + agg[c].n + 'x, ' + rp(agg[c].t) + '\n'; });
+        const bar = {};
     RK.forEach(x=> (x.items||[]).forEach(i=>{
       const k = i.nama + (i.ukuran? ' ('+i.ukuran+')':'');
       bar[k] = (bar[k]||0) + Number(i.qty||0);
