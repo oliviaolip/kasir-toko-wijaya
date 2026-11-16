@@ -536,6 +536,86 @@ function rkCard(rows, judul){
 }
 
 
+function rkTrxCard(x){
+  const t = hms(x.jam);
+  const isi = (x.items||[]).map(i=>
+    '<li><b>'+i.qty+'x</b> '+i.nama+(i.ukuran? ' <span style="color:#8a948e">&middot; '+i.ukuran+'</span>':'')+
+    ' <span style="float:right;color:#4c574f">'+rp(Number(i.qty||0)*Number(i.harga||0))+'</span></li>').join('');
+  return '<div class="trxCard">'+
+    '<div class="top"><span class="tm">'+String(x.jam||'')+'</span><span class="tot">'+rp(x.total)+'</span></div>'+
+    '<div class="who">'+(x.customer || 'Umum')+'</div>'+
+    '<ul>'+isi+'</ul>'+
+    '<button class="delLink" data-del="'+x.id+'">Hapus transaksi ini</button>'+
+  '</div>';
+}
+
+function renderRekap(){
+  const box = $('rekapBody'), crumb = $('rkCrumb');
+  $('rkDelDay').style.display = (rkHour || rkCust || rkPer === 'bulan')? 'none' : 'block';
+  $('rkWa').style.display = (rkPer === 'bulan')? 'none' : 'block';
+  if(rkPer === 'bulan'){ renderBulan(); return; }
+  $('rkDelDay').style.display = (rkHour || rkCust || rkPer === 'bulan')? 'none' : 'block';
+  $('rkWa').style.display = (rkPer === 'bulan')? 'none' : 'block';
+  crumb.innerHTML = '';
+
+  // ---- rincian per pelanggan ----
+  if(rkCust){
+    const inC = RK.filter(x=> (x.customer||'Umum') === rkCust)
+                  .sort((a,b)=> String(a.jam).localeCompare(String(b.jam)));
+    const omc = inC.reduce((a,x)=> a + Number(x.total||0), 0);
+    box.innerHTML =
+      '<button class="rkBack" data-back="3">&#8249; Semua pelanggan</button>'+
+      '<div class="rkHead"><span class="t">'+rkCust+'</span><span class="s">'+inC.length+' trx &middot; '+rp(omc)+'</span></div>'+
+      (inC.length? inC.map(rkTrxCard).join('') : '<div class="rkNote">Tidak ada transaksi.</div>');
+    return;
+  }
+
+  // ---- rincian dalam 1 jam (per menit) ----
+  if(rkHour && !rkMin){
+    const inHour = RK.filter(x=> hms(x.jam).h === rkHour)
+                     .sort((a,b)=> String(a.jam).localeCompare(String(b.jam)));
+    const om = inHour.reduce((a,x)=> a + Number(x.total||0), 0);
+    box.innerHTML =
+      '<button class="rkBack" data-back="1">&#8249; Ringkasan</button>'+
+      '<div class="rkHead"><span class="t">Jam '+rkHour+'</span><span class="s">'+inHour.length+' trx &middot; '+rp(om)+'</span></div>'+
+      inHour.map(rkTrxCard).join('');
+    return;
+  }
+
+  // ---- ringkasan tanggal ----
+  if(!RK.length){
+    box.innerHTML = rkCard(RK) + '<div class="rkNote">Belum ada transaksi tanggal ini.</div>';
+    return;
+  }
+
+  const agg = custAgg(RK);
+  const perJam = {};
+  RK.forEach(x=>{
+    const h = hms(x.jam).h;
+    perJam[h] = perJam[h] || {n:0, t:0};
+    perJam[h].n++; perJam[h].t += Number(x.total||0);
+  });
+
+  const listCust = Object.keys(agg).sort().map(c=>
+    '<div class="rkRow tap" data-c="'+c+'">'+
+      '<div><div class="nm">'+c+'</div><div class="sub">'+agg[c].n+' transaksi</div></div>'+
+      '<div style="display:flex;align-items:center"><span class="amt">'+rp(agg[c].t)+'</span><span class="chev">&#8250;</span></div>'+
+    '</div>').join('');
+
+  const listJam = Object.keys(perJam).sort().map(h=>
+    '<div class="rkRow tap" data-h="'+h+'">'+
+      '<div><div class="nm">Jam '+h+':00</div><div class="sub">'+perJam[h].n+' transaksi</div></div>'+
+      '<div style="display:flex;align-items:center"><span class="amt">'+rp(perJam[h].t)+'</span><span class="chev">&#8250;</span></div>'+
+    '</div>').join('');
+
+  box.innerHTML = rkCard(RK)+
+    '<div class="seg">'+
+      '<button data-seg="cust" class="'+(rkSeg==='cust'?'on':'')+'">Per pelanggan</button>'+
+      '<button data-seg="jam" class="'+(rkSeg==='jam'?'on':'')+'">Per jam</button>'+
+    '</div>'+
+    (rkSeg==='cust'? listCust : listJam);
+}
+
 function renderBulan(){
   const box = $('rekapBody');
   const perDay = {};
