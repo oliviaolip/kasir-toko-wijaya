@@ -111,10 +111,22 @@ label{display:block;font-size:12px;color:#555;margin:8px 0 3px}
 .rkHead .t{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#7d8983}
 .rkHead .s{font-size:12.5px;font-weight:700;color:#0f7a55;font-variant-numeric:tabular-nums}
 .rkNote{font-size:12px;color:#8a948e;padding:10px 2px}
+
+.net{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;letter-spacing:.03em;
+     padding:4px 9px;border-radius:999px;background:rgba(255,255,255,.18);color:#fff;text-transform:uppercase}
+.net i{width:6px;height:6px;border-radius:50%;background:#ffd166;display:inline-block}
+.net.on i{background:#7bffb0}
+.net.off i{background:#ff9f9f}
+.rkPer{display:flex;background:#eef2ef;border-radius:12px;padding:4px;margin:10px 0 6px}
+.rkPer button{flex:1;border:0;background:transparent;padding:9px 0;border-radius:9px;font-size:13px;font-weight:600;color:#5d6862}
+.rkPer button.on{background:#fff;color:#0f7a55;box-shadow:0 1px 3px rgba(0,0,0,.10)}
+.expRow{display:flex;gap:8px;margin:12px 0 4px}
+.expRow button{flex:1;border:0;border-radius:11px;padding:11px 6px;font-size:12.5px;font-weight:700;background:#eef2ef;color:#31413a}
+.expRow button.pri{background:#0f7a55;color:#fff}
 </style></head>
 <body>
 <header>
-  <h1><span>Kasir &mdash; Toko Wijaya</span>
+  <h1><span>Kasir &mdash; Toko Wijaya <span class="net off" id="net"><i></i><span id="netTxt">offline</span></span></span>
     <span class="tools"><button id="cfg">&#9881;</button></span>
   </h1>
   <div class="tabs"><button id="tabKasir" class="on">Kasir</button><button id="tabRekap">Rekap</button></div>
@@ -180,7 +192,9 @@ label{display:block;font-size:12px;color:#555;margin:8px 0 3px}
 
 <div class="mask" id="mRekap"><div class="sheet">
   <h2>Rekap penjualan</h2>
-  <div class="tot2"><span>Tanggal</span><input id="rDate" type="date" style="width:auto;font-size:14px;padding:5px 8px"></div>
+  <div class="rkPer"><button id="perHari" class="on">Harian</button><button id="perBulan">Bulanan</button></div>
+  <div class="tot2" id="rowHari"><span>Tanggal</span><input id="rDate" type="date" style="width:auto;font-size:14px;padding:5px 8px"></div>
+  <div class="tot2" id="rowBulan" style="display:none"><span>Bulan</span><input id="rMonth" type="month" style="width:auto;font-size:14px;padding:5px 8px"></div>
   <div id="rkCrumb" style="font-size:12.5px;color:#6f7b74;margin:8px 0 2px"></div>
   <div id="rekapBody" style="margin-top:6px"></div>
   <div class="acts"><button id="rkWa">Kirim ke WhatsApp</button><button id="rkDelDay" class="red">Hapus rekap tanggal ini</button><button id="rkClose" class="grey">Tutup</button></div>
@@ -195,8 +209,9 @@ const norm = s => String(s).toLowerCase().replace(/asi|asy|asoi|aoy|ampua/g,'aso
 
 let ITEMS = BASE.slice(), CART = [], pickItem = null, CACHE_TRX = [];
 let SRC = { src:"file", n:BASE.length, at:"" };
-let HURL = localStorage.getItem(KEYH) || '';
-let KURL = localStorage.getItem(KEYK) || '';
+const DEF_HURL = '', DEF_KURL = '';
+let HURL = localStorage.getItem(KEYH) || DEF_HURL;
+let KURL = localStorage.getItem(KEYK) || DEF_KURL;
 
 function saveCart(){ try{ localStorage.setItem(KEYC, JSON.stringify(CART)); }catch(e){} }
 function loadCart(){ try{ CART = JSON.parse(localStorage.getItem(KEYC)||'[]') || []; }catch(e){ CART=[]; } }
@@ -423,8 +438,33 @@ setInterval(()=>{
   loadRekap();
 }, 30000);
 $('rDate').addEventListener('change', ()=>{ rkHour=null; rkMin=null; rkCust=null; loadRekap(); });
+$('rMonth').addEventListener('change', ()=>{ rkHour=null; rkMin=null; rkCust=null; loadRekap(); });
+$('perHari').addEventListener('click', ()=>{
+  rkPer='hari'; $('perHari').classList.add('on'); $('perBulan').classList.remove('on');
+  $('rowHari').style.display=''; $('rowBulan').style.display='none';
+  rkHour=null; rkMin=null; rkCust=null; loadRekap();
+});
+$('perBulan').addEventListener('click', ()=>{
+  rkPer='bulan'; $('perBulan').classList.add('on'); $('perHari').classList.remove('on');
+  $('rowHari').style.display='none'; $('rowBulan').style.display='';
+  if(!$('rMonth').value){
+    const d = new Date();
+    $('rMonth').value = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+  }
+  rkHour=null; rkMin=null; rkCust=null; loadRekap();
+});
 
-let RK = [], rkHour = null, rkMin = null, rkCust = null, rkSeg = 'cust', RKTIME = '';
+let RK = [], rkHour = null, rkMin = null, rkCust = null, rkSeg = 'cust', RKTIME = '', rkPer = 'hari';
+
+function setNet(ok, ket){
+  const n = $('net');
+  n.classList.remove('on','off');
+  n.classList.add(ok ? 'on' : 'off');
+  $('netTxt').textContent = ok ? 'online' : 'offline';
+  n.title = ket || (ok ? 'Tersambung ke Sheet' : 'Tidak tersambung - data dari HP');
+}
+window.addEventListener('online', ()=> setNet(true, 'Internet kembali'));
+window.addEventListener('offline', ()=> setNet(false, 'Internet mati'));
 
 function hms(t){
   const p = String(t||'').replace(/\./g,':').split(':').map(x=>String(x).padStart(2,'0'));
@@ -433,6 +473,15 @@ function hms(t){
 function tglKey(){
   const d = $('rDate').value.split('-');
   return d[2]+'/'+d[1]+'/'+d[0];
+}
+function bulanKey(){
+  const m = $('rMonth').value.split('-');
+  return m[1]+'/'+m[0];
+}
+function bulanLabel(){
+  const m = $('rMonth').value.split('-');
+  const nm = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  return nm[Number(m[1])-1] + ' ' + m[0];
 }
 function pcs(rows){
   let n = 0;
@@ -447,10 +496,14 @@ async function loadRekap(){
     const r = await fetch(KURL + (KURL.includes('?')?'&':'?') + 't=' + Date.now());
     const all = await r.json();
     CACHE_TRX = Array.isArray(all)? all : [];
-    RK = CACHE_TRX.filter(x=> x.tanggal === tglKey());
-    RKTIME = new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    RK = (rkPer === 'bulan')
+      ? CACHE_TRX.filter(x=> String(x.tanggal||'').slice(3) === bulanKey())
+      : CACHE_TRX.filter(x=> x.tanggal === tglKey());
+    RKTIME = new Date().toTimeString().slice(0,8);
+    setNet(true, 'Rekap termuat ' + RKTIME);
     renderRekap();
   }catch(e){
+    setNet(false, 'Gagal memuat rekap');
     box.innerHTML = '<div class="empty">Gagal memuat. Cek internet / URL kasir.</div>';
   }
 }
@@ -465,11 +518,11 @@ function custAgg(rows){
   return o;
 }
 
-function rkCard(rows){
+function rkCard(rows, judul){
   const om = rows.reduce((a,x)=> a + Number(x.total||0), 0);
   const agg = custAgg(rows);
   return '<div class="rkHero">'+
-    '<div class="lbl">Omzet tanggal ini</div>'+
+    '<div class="lbl">'+(judul || 'Omzet tanggal ini')+'</div>'+
     '<div class="big">'+rp(om)+'</div>'+
     '<div class="rkChips">'+
       '<div class="chip"><b>'+rows.length+'</b><span>transaksi</span></div>'+
@@ -478,6 +531,163 @@ function rkCard(rows){
     '</div>'+
     (RKTIME? '<div style="font-size:10.5px;opacity:.8;margin-top:9px">Diperbarui '+RKTIME+' &middot; otomatis tiap 30 detik</div>' : '')+
   '</div>';
+}
+
+
+function renderBulan(){
+  const box = $('rekapBody');
+  const perDay = {};
+  RK.forEach(x=>{
+    perDay[x.tanggal] = perDay[x.tanggal] || {n:0, t:0, rows:[]};
+    perDay[x.tanggal].n++; perDay[x.tanggal].t += Number(x.total||0);
+    perDay[x.tanggal].rows.push(x);
+  });
+  const days = Object.keys(perDay).sort((a,b)=>{
+    const pa=a.split('/'), pb=b.split('/');
+    return new Date(pa[2]+'-'+pa[1]+'-'+pa[0]) - new Date(pb[2]+'-'+pb[1]+'-'+pb[0]);
+  });
+
+  const list = days.map(d=>
+    '<div class="rkRow tap" data-day="'+d+'">'+
+      '<div><div class="nm">'+d+'</div><div class="sub">'+perDay[d].n+' transaksi</div></div>'+
+      '<div style="display:flex;align-items:center"><span class="amt">'+rp(perDay[d].t)+'</span><span class="chev">&#8250;</span></div>'+
+    '</div>').join('');
+
+  box.innerHTML = rkCard(RK, 'Omzet ' + bulanLabel()) +
+    '<div class="expRow">'+
+      '<button id="expXls">Excel</button>'+
+      '<button id="expPdf">PDF</button>'+
+      '<button id="expWa" class="pri">Kirim WA</button>'+
+    '</div>'+
+    (days.length? ('<div class="rkHead"><span class="t">Per hari</span><span class="s">'+days.length+' hari</span></div>'+list)
+                : '<div class="rkNote">Belum ada transaksi bulan ini.</div>');
+
+  $('expXls').addEventListener('click', ()=> eksporExcel());
+  $('expPdf').addEventListener('click', ()=> eksporPdf());
+  $('expWa').addEventListener('click', ()=> eksporWA());
+}
+
+function barisEkspor(){
+  const out = [];
+  RK.slice().sort((a,b)=>{
+    const pa=String(a.tanggal).split('/'), pb=String(b.tanggal).split('/');
+    const da=new Date(pa[2]+'-'+pa[1]+'-'+pa[0]+'T'+(String(a.jam||'0:0:0').replace(/\./g,':')));
+    const db=new Date(pb[2]+'-'+pb[1]+'-'+pb[0]+'T'+(String(b.jam||'0:0:0').replace(/\./g,':')));
+    return da-db;
+  }).forEach(x=>{
+    (x.items||[]).forEach(i=>{
+      out.push({
+        tanggal: x.tanggal, jam: x.jam, pelanggan: x.customer || 'Umum',
+        barang: i.nama + (i.ukuran? ' ('+i.ukuran+')':''),
+        qty: Number(i.qty||0), harga: Number(i.harga||0),
+        subtotal: Number(i.qty||0)*Number(i.harga||0), trx: x.id
+      });
+    });
+  });
+  return out;
+}
+
+function esc(s){
+  return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function xmlExcel(){
+  const rows = barisEkspor();
+  const om = RK.reduce((a,x)=> a + Number(x.total||0), 0);
+  const head = ['Tanggal','Jam','Pelanggan','Barang','Qty','Harga','Subtotal','ID Transaksi'];
+  let x = '<?xml version="1.0"?>\n<?mso-application progid="Excel.Sheet"?>\n';
+  x += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">';
+  x += '<Styles><Style ss:ID="h"><Font ss:Bold="1"/><Interior ss:Color="#D9EAD3" ss:Pattern="Solid"/></Style>';
+  x += '<Style ss:ID="n"><NumberFormat ss:Format="#,##0"/></Style></Styles>';
+  x += '<Worksheet ss:Name="Rekap"><Table>';
+  x += '<Row><Cell ss:StyleID="h"><Data ss:Type="String">REKAP PENJUALAN TOKO WIJAYA</Data></Cell></Row>';
+  x += '<Row><Cell><Data ss:Type="String">'+esc(bulanLabel())+'</Data></Cell></Row>';
+  x += '<Row><Cell><Data ss:Type="String">Total transaksi</Data></Cell><Cell><Data ss:Type="Number">'+RK.length+'</Data></Cell></Row>';
+  x += '<Row><Cell><Data ss:Type="String">Omzet</Data></Cell><Cell ss:StyleID="n"><Data ss:Type="Number">'+om+'</Data></Cell></Row>';
+  x += '<Row></Row><Row>';
+  head.forEach(h=>{ x += '<Cell ss:StyleID="h"><Data ss:Type="String">'+esc(h)+'</Data></Cell>'; });
+  x += '</Row>';
+  rows.forEach(r=>{
+    x += '<Row>';
+    x += '<Cell><Data ss:Type="String">'+esc(r.tanggal)+'</Data></Cell>';
+    x += '<Cell><Data ss:Type="String">'+esc(r.jam)+'</Data></Cell>';
+    x += '<Cell><Data ss:Type="String">'+esc(r.pelanggan)+'</Data></Cell>';
+    x += '<Cell><Data ss:Type="String">'+esc(r.barang)+'</Data></Cell>';
+    x += '<Cell><Data ss:Type="Number">'+r.qty+'</Data></Cell>';
+    x += '<Cell ss:StyleID="n"><Data ss:Type="Number">'+r.harga+'</Data></Cell>';
+    x += '<Cell ss:StyleID="n"><Data ss:Type="Number">'+r.subtotal+'</Data></Cell>';
+    x += '<Cell><Data ss:Type="String">'+esc(r.trx)+'</Data></Cell>';
+    x += '</Row>';
+  });
+  x += '</Table></Worksheet></Workbook>';
+  return x;
+}
+
+function namaFile(ext){
+  return 'Rekap_Toko_Wijaya_' + bulanLabel().replace(/ /g,'_') + '.' + ext;
+}
+
+async function eksporExcel(){
+  const blob = new Blob(['\ufeff' + xmlExcel()], {type:'application/vnd.ms-excel'});
+  const file = new File([blob], namaFile('xls'), {type:'application/vnd.ms-excel'});
+  if(navigator.canShare && navigator.canShare({files:[file]})){
+    try{ await navigator.share({files:[file], title:'Rekap ' + bulanLabel(), text:'Rekap penjualan ' + bulanLabel()}); return; }catch(e){}
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = file.name; a.click();
+  setTimeout(()=> URL.revokeObjectURL(a.href), 4000);
+}
+
+async function eksporWA(){
+  const blob = new Blob(['\ufeff' + xmlExcel()], {type:'application/vnd.ms-excel'});
+  const file = new File([blob], namaFile('xls'), {type:'application/vnd.ms-excel'});
+  const teks = teksBulan();
+  if(navigator.canShare && navigator.canShare({files:[file]})){
+    try{
+      await navigator.share({files:[file], title:'Rekap ' + bulanLabel(), text:teks});
+      return;
+    }catch(e){}
+  }
+  window.open('https://wa.me/?text=' + encodeURIComponent(teks), '_blank');
+  alert('File Excel tidak bisa dilampirkan otomatis di browser ini.\nFile akan terunduh - lampirkan manual di WhatsApp, atau pakai tombol Excel lalu Bagikan.');
+  eksporExcel();
+}
+
+function teksBulan(){
+  const om = RK.reduce((a,x)=> a + Number(x.total||0), 0);
+  const agg = custAgg(RK);
+  const days = {};
+  RK.forEach(x=>{ days[x.tanggal] = days[x.tanggal] || {n:0,t:0}; days[x.tanggal].n++; days[x.tanggal].t += Number(x.total||0); });
+  let t = '*REKAP BULANAN TOKO WIJAYA*\n' + bulanLabel() + '\n------------------------\n';
+  t += 'Transaksi : ' + RK.length + '\nOmzet     : ' + rp(om) + '\n';
+  if(RK.length){
+    t += '------------------------\n*Per pelanggan*\n';
+    Object.keys(agg).sort().forEach(c=>{ t += '- ' + c + ': ' + agg[c].n + 'x, ' + rp(agg[c].t) + '\n'; });
+    t += '------------------------\n*Per hari*\n';
+    Object.keys(days).sort().forEach(d=>{ t += '- ' + d + ': ' + days[d].n + 'x, ' + rp(days[d].t) + '\n'; });
+  }
+  return t;
+}
+
+function eksporPdf(){
+  const rows = barisEkspor();
+  const om = RK.reduce((a,x)=> a + Number(x.total||0), 0);
+  const w = window.open('', '_blank');
+  if(!w){ alert('Popup diblokir. Izinkan popup lalu coba lagi.'); return; }
+  let h = '<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rekap ' + bulanLabel() + '</title>';
+  h += '<style>body{font-family:system-ui,Arial;padding:16px;color:#111}h1{font-size:18px;margin:0 0 2px}';
+  h += '.sub{color:#555;font-size:12px;margin-bottom:12px}table{width:100%;border-collapse:collapse;font-size:11px}';
+  h += 'th{background:#e8f3ec;text-align:left;padding:6px;border:1px solid #cfe0d6}td{padding:6px;border:1px solid #dde5e0}';
+  h += '.n{text-align:right}.tot{margin-top:12px;font-size:14px;font-weight:700}</style></head><body>';
+  h += '<h1>REKAP PENJUALAN TOKO WIJAYA</h1><div class="sub">' + bulanLabel() + ' &middot; dicetak ' + new Date().toLocaleString('id-ID') + '</div>';
+  h += '<table><thead><tr><th>Tanggal</th><th>Jam</th><th>Pelanggan</th><th>Barang</th><th class="n">Qty</th><th class="n">Harga</th><th class="n">Subtotal</th></tr></thead><tbody>';
+  rows.forEach(r=>{
+    h += '<tr><td>'+esc(r.tanggal)+'</td><td>'+esc(r.jam)+'</td><td>'+esc(r.pelanggan)+'</td><td>'+esc(r.barang)+
+         '</td><td class="n">'+r.qty+'</td><td class="n">'+rp(r.harga)+'</td><td class="n">'+rp(r.subtotal)+'</td></tr>';
+  });
+  h += '</tbody></table><div class="tot">Transaksi: ' + RK.length + ' &middot; Omzet: ' + rp(om) + '</div>';
+  h += '<script>window.onload=function(){setTimeout(function(){window.print()},350)}<\/script></body></html>';
+  w.document.write(h); w.document.close();
 }
 
 function rkTrxCard(x){
@@ -495,7 +705,11 @@ function rkTrxCard(x){
 
 function renderRekap(){
   const box = $('rekapBody'), crumb = $('rkCrumb');
-  $('rkDelDay').style.display = (rkHour || rkCust)? 'none' : 'block';
+  $('rkDelDay').style.display = (rkHour || rkCust || rkPer === 'bulan')? 'none' : 'block';
+  $('rkWa').style.display = (rkPer === 'bulan')? 'none' : 'block';
+  if(rkPer === 'bulan'){ renderBulan(); return; }
+  $('rkDelDay').style.display = (rkHour || rkCust || rkPer === 'bulan')? 'none' : 'block';
+  $('rkWa').style.display = (rkPer === 'bulan')? 'none' : 'block';
   crumb.innerHTML = '';
 
   // ---- rincian per pelanggan ----
@@ -557,6 +771,13 @@ function renderRekap(){
 }
 
 $('rekapBody').addEventListener('click', e=>{
+  const day = e.target.closest('[data-day]');
+  if(day){
+    const p = day.dataset.day.split('/');
+    $('rDate').value = p[2]+'-'+p[1]+'-'+p[0];
+    $('perHari').click();
+    return;
+  }
   const seg = e.target.closest('[data-seg]');
   if(seg){ rkSeg = seg.dataset.seg; renderRekap(); return; }
   const c = e.target.closest('[data-c]');
@@ -661,9 +882,16 @@ async function loadItemsFromSheet(){
     if(Array.isArray(arr) && arr.length){
       ITEMS = arr.map(it=>({nama: it.nama, ket: it.ket||'', sizes: (it.sizes||[]).map(s=>({u:s.u, m:(s.m!=null? s.m : null), j1:s.j1}))}));
       SRC = { src:'sheet', n:ITEMS.length, at:new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}) };
+      setNet(true, 'Harga dari Sheet');
+
+      // item baru di Sheet bisa membawa barang yang belum ada di kasir
+
       renderList($('q').value);
     }
-  }catch(e){ $('hint').innerHTML = 'gagal ambil data Sheet - pakai data terakhir di HP'; }
+  }catch(e){
+    setNet(false, 'Gagal ambil data harga');
+    $('hint').innerHTML = 'gagal ambil data Sheet - pakai data terakhir di HP';
+  }
 }
 
 $('hint').addEventListener('click', async ()=>{
