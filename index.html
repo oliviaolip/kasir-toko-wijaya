@@ -371,8 +371,10 @@ $('paySave').addEventListener('click', async ()=>{
   $('mPay').classList.remove('on');
   if(KURL){
     try{
-      await fetch(KURL, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(trx)});
-    }catch(e){ alert('Transaksi tersimpan di HP, tapi gagal kirim ke Sheet. Cek internet/URL kasir.'); }
+      const rs = await fetch(KURL, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(trx)});
+      setNet(true, 'Transaksi terkirim');
+      await rs.text();
+    }catch(e){ setNet(false, 'Transaksi gagal terkirim'); alert('Transaksi tersimpan di HP, tapi gagal kirim ke Sheet. Cek internet/URL kasir.'); }
   } else {
     alert('URL kasir belum diisi (tombol ⚙). Transaksi hanya tersimpan di HP ini.');
   }
@@ -889,6 +891,7 @@ async function hapusTrx(id){
   if(!KURL){ alert('URL kasir belum diisi.'); return; }
   try{
     const res = await fetch(KURL, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify({action:'hapus', id:id})});
+    setNet(true, 'Hapus terkirim');
     const balas = (await res.text().catch(()=> '')).slice(0,140);
     await loadRekap();
     const masih = CACHE_TRX.some(x=> String(x.id) === String(id));
