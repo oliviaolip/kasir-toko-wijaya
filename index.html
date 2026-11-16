@@ -867,39 +867,62 @@ function unduh(blob, nama){
   setTimeout(()=> URL.revokeObjectURL(a.href), 5000);
 }
 
+function toast2(msg){
+  const t = $('toast');
+  $('toastMsg').textContent = msg;
+  $('toastUndo').style.display = 'none';
+  t.classList.add('on');
+  clearTimeout(window.__t2);
+  window.__t2 = setTimeout(()=> t.classList.remove('on'), 3500);
+}
+
+function namaFile(ext){
+  return 'Rekap_Toko_Wijaya_' + bulanLabel().split(' ').join('_') + '.' + ext;
+}
+
 async function eksporExcel(){
-  const blob = new Blob([buatXlsx()], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-  const nama = namaFile('xlsx');
-  if(await bagikan(blob, nama, 'Rekap ' + bulanLabel())) return;
-  unduh(blob, nama);
+  try{
+    toast2('Membuat file Excel...');
+    const blob = new Blob([buatXlsx()], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const nama = namaFile('xlsx');
+    if(await bagikan(blob, nama, 'Rekap ' + bulanLabel())) return;
+    unduh(blob, nama);
+    toast2('File Excel diunduh: ' + nama);
+  }catch(e){ alert('Gagal membuat Excel: ' + e.message); }
 }
 
 async function eksporPdf(){
-  const blob = new Blob([buatPdf()], {type:'application/pdf'});
-  const nama = namaFile('pdf');
-  const url = URL.createObjectURL(blob);
-  window.open(url, '_blank');            // preview dulu
-  setTimeout(()=> unduh(blob, nama), 1200);  // lalu otomatis tersimpan
-  setTimeout(()=> URL.revokeObjectURL(url), 60000);
+  try{
+    toast2('Membuat file PDF...');
+    const blob = new Blob([buatPdf()], {type:'application/pdf'});
+    const nama = namaFile('pdf');
+    const url = URL.createObjectURL(blob);
+    const w = window.open(url, '_blank');
+    setTimeout(()=> unduh(blob, nama), 1200);
+    setTimeout(()=> URL.revokeObjectURL(url), 60000);
+    toast2(w ? ('PDF dibuka, lalu tersimpan: ' + nama) : ('PDF diunduh: ' + nama));
+  }catch(e){ alert('Gagal membuat PDF: ' + e.message); }
 }
 
 async function eksporWA(){
-  const xl = new Blob([buatXlsx()], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-  const pdf = new Blob([buatPdf()], {type:'application/pdf'});
-  const teks = teksBulan();
-  const f1 = new File([xl], namaFile('xlsx'), {type: xl.type});
-  const f2 = new File([pdf], namaFile('pdf'), {type: pdf.type});
-  if(navigator.canShare && navigator.canShare({files:[f1, f2]})){
-    try{ await navigator.share({files:[f1, f2], title:'Rekap ' + bulanLabel(), text: teks}); return; }catch(e){}
-  }
-  if(navigator.canShare && navigator.canShare({files:[f2]})){
-    try{ await navigator.share({files:[f2], title:'Rekap ' + bulanLabel(), text: teks}); return; }catch(e){}
-  }
-  window.open('https://wa.me/?text=' + encodeURIComponent(teks), '_blank');
-  unduh(xl, namaFile('xlsx'));
-  alert('File tidak bisa dilampirkan otomatis di browser ini.\nFile Excel sudah terunduh - lampirkan manual di WhatsApp.');
+  try{
+    toast2('Menyiapkan file...');
+    const xl = new Blob([buatXlsx()], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const pdf = new Blob([buatPdf()], {type:'application/pdf'});
+    const teks = teksBulan();
+    const f1 = new File([xl], namaFile('xlsx'), {type: xl.type});
+    const f2 = new File([pdf], namaFile('pdf'), {type: pdf.type});
+    if(navigator.canShare && navigator.canShare({files:[f1, f2]})){
+      try{ await navigator.share({files:[f1, f2], title:'Rekap ' + bulanLabel(), text: teks}); return; }catch(e){}
+    }
+    if(navigator.canShare && navigator.canShare({files:[f1]})){
+      try{ await navigator.share({files:[f1], title:'Rekap ' + bulanLabel(), text: teks}); return; }catch(e){}
+    }
+    window.open('https://wa.me/?text=' + encodeURIComponent(teks), '_blank');
+    unduh(xl, namaFile('xlsx'));
+    toast2('File Excel diunduh - lampirkan di WhatsApp');
+  }catch(e){ alert('Gagal mengirim: ' + e.message); }
 }
-
 
 $('rekapBody').addEventListener('click', e=>{
   const day = e.target.closest('[data-day]');
