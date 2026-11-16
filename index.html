@@ -323,7 +323,9 @@ $('btnPay').addEventListener('click', ()=>{
   $('payCust').value = '';
   const dd = new Date();
   $('payDate').value = dd.getFullYear()+'-'+String(dd.getMonth()+1).padStart(2,'0')+'-'+String(dd.getDate()).padStart(2,'0');
-  const names = [...new Set(RK.concat(CACHE_TRX).map(x=> x.customer || 'Umum'))].filter(n=> n && n !== 'Umum').sort();
+  const seen = {};
+  RK.concat(CACHE_TRX).forEach(x=>{ const d = normCust(x.customer||'Umum'); if(d !== 'Umum') seen[custKey(d)] = d; });
+  const names = Object.values(seen).sort((a,b)=> a.localeCompare(b,'id'));
   $('custList').innerHTML = names.map(n=>'<option value="'+n+'">').join('');
   refreshPay();
   $('mPay').classList.add('on');
@@ -361,7 +363,7 @@ $('paySave').addEventListener('click', async ()=>{
   const total = CART.reduce((a,c)=> a + c.harga*c.qty, 0);
   const cash = cashNow();
   if(cash > 0 && cash < total){ alert('Uang diterima kurang ' + rp(total-cash) + '. Transaksi dibatalkan.'); return; }
-  const cust = ($('payCust').value || '').trim() || 'Umum';
+  const cust = normCust($('payCust').value);
   const trx = {
     id: trxId(pdate), tanggal: t.tanggal, jam: t.jam, iso: t.iso, customer: cust,
     items: CART.map(c=>({nama:c.nama, ukuran:c.ukuran, qty:c.qty, harga:c.harga, modal:c.modal||0, subtotal:c.harga*c.qty})),
@@ -510,12 +512,20 @@ async function loadRekap(){
   }
 }
 
+function custKey(n){ return String(n==null?'':n).trim().replace(/\s+/g,' ').toLowerCase(); }
+function normCust(n){
+  const t = String(n==null?'':n).trim().replace(/\s+/g,' ');
+  if(!t) return 'Umum';
+  if(t.toLowerCase() === 'umum') return 'Umum';
+  return t.split(' ').map(w=> w ? (w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()) : w).join(' ');
+}
 function custAgg(rows){
   const o = {};
   rows.forEach(x=>{
-    const c = x.customer || 'Umum';
-    o[c] = o[c] || {n:0, t:0};
-    o[c].n++; o[c].t += Number(x.total||0);
+    const k = custKey(x.customer || 'Umum');
+    const disp = normCust(x.customer || 'Umum');
+    o[k] = o[k] || {n:0, t:0, nama:disp};
+    o[k].n++; o[k].t += Number(x.total||0);
   });
   return o;
 }
@@ -543,7 +553,7 @@ function rkTrxCard(x){
     ' <span style="float:right;color:#4c574f">'+rp(Number(i.qty||0)*Number(i.harga||0))+'</span></li>').join('');
   return '<div class="trxCard">'+
     '<div class="top"><span class="tm">'+String(x.jam||'')+'</span><span class="tot">'+rp(x.total)+'</span></div>'+
-    '<div class="who">'+(x.customer || 'Umum')+'</div>'+
+    '<div class="who">'+normCust(x.customer || 'Umum')+'</div>'+
     '<ul>'+isi+'</ul>'+
     '<button class="delLink" data-del="'+x.id+'">Hapus transaksi ini</button>'+
   '</div>';
@@ -553,22 +563,23 @@ function renderRekap(){
   const box = $('rekapBody'), crumb = $('rkCrumb');
   $('rkDelDay').style.display = (rkHour || rkCust || rkPer === 'bulan')? 'none' : 'block';
   $('rkWa').style.display = (rkPer === 'bulan')? 'none' : 'block';
-  if(rkPer === 'bulan'){ renderBulan(); return; }
   $('rkDelDay').style.display = (rkHour || rkCust || rkPer === 'bulan')? 'none' : 'block';
   $('rkWa').style.display = (rkPer === 'bulan')? 'none' : 'block';
   crumb.innerHTML = '';
 
   // ---- rincian per pelanggan ----
   if(rkCust){
-    const inC = RK.filter(x=> (x.customer||'Umum') === rkCust)
+    const inC = RK.filter(x=> custKey(x.customer||'Umum') === custKey(rkCust))
                   .sort((a,b)=> String(a.jam).localeCompare(String(b.jam)));
     const omc = inC.reduce((a,x)=> a + Number(x.total||0), 0);
     box.innerHTML =
-      '<button class="rkBack" data-back="3">&#8249; Semua pelanggan</button>'+
-      '<div class="rkHead"><span class="t">'+rkCust+'</span><span class="s">'+inC.length+' trx &middot; '+rp(omc)+'</span></div>'+
+      '<button class="rkBack" data-back="3">&#8249; '+(rkPer==='bulan'? 'Rekap bulan' : 'Semua pelanggan')+'</button>'+
+      '<div class="rkHead"><span class="t">'+normCust(rkCust)+'</span><span class="s">'+inC.length+' trx &middot; '+rp(omc)+'</span></div>'+
       (inC.length? inC.map(rkTrxCard).join('') : '<div class="rkNote">Tidak ada transaksi.</div>');
     return;
   }
+
+  if(rkPer === 'bulan'){ renderBulan(); return; }
 
   // ---- rincian dalam 1 jam (per menit) ----
   if(rkHour && !rkMin){
@@ -596,9 +607,9 @@ function renderRekap(){
     perJam[h].n++; perJam[h].t += Number(x.total||0);
   });
 
-  const listCust = Object.keys(agg).sort().map(c=>
-    '<div class="rkRow tap" data-c="'+c+'">'+
-      '<div><div class="nm">'+c+'</div><div class="sub">'+agg[c].n+' transaksi</div></div>'+
+  const listCust = Object.keys(agg).sort((a,b)=> agg[a].nama.localeCompare(agg[b].nama,'id')).map(c=>
+    '<div class="rkRow tap" data-c="'+agg[c].nama+'">'+
+      '<div><div class="nm">'+agg[c].nama+'</div><div class="sub">'+agg[c].n+' transaksi</div></div>'+
       '<div style="display:flex;align-items:center"><span class="amt">'+rp(agg[c].t)+'</span><span class="chev">&#8250;</span></div>'+
     '</div>').join('');
 
@@ -641,8 +652,18 @@ function renderBulan(){
       '<button id="expPdf">PDF</button>'+
       '<button id="expWa" class="pri">Kirim WA</button>'+
     '</div>'+
-    (days.length? ('<div class="rkHead"><span class="t">Per hari</span><span class="s">'+days.length+' hari</span></div>'+list)
-                : '<div class="rkNote">Belum ada transaksi bulan ini.</div>');
+    (days.length? (
+        (()=>{ const agg = custAgg(RK);
+          const lc = Object.keys(agg).sort((a,b)=> agg[a].nama.localeCompare(agg[b].nama,'id')).map(c=>
+            '<div class="rkRow tap" data-c="'+agg[c].nama+'">'+
+              '<div><div class="nm">'+agg[c].nama+'</div><div class="sub">'+agg[c].n+' transaksi</div></div>'+
+              '<div style="display:flex;align-items:center"><span class="amt">'+rp(agg[c].t)+'</span><span class="chev">&#8250;</span></div>'+
+            '</div>').join('');
+          return '<div class="rkHead"><span class="t">Per pelanggan</span><span class="s">'+Object.keys(agg).length+' pelanggan</span></div>'+lc;
+        })()+
+        '<div class="rkHead"><span class="t">Per hari</span><span class="s">'+days.length+' hari</span></div>'+list
+      )
+      : '<div class="rkNote">Belum ada transaksi bulan ini.</div>');
 
   $('expXls').addEventListener('click', ()=> eksporExcel());
   $('expPdf').addEventListener('click', ()=> eksporPdf());
@@ -659,7 +680,7 @@ function barisEkspor(){
   }).forEach(x=>{
     (x.items||[]).forEach(i=>{
       out.push({
-        tanggal: x.tanggal, jam: x.jam, pelanggan: x.customer || 'Umum',
+        tanggal: x.tanggal, jam: x.jam, pelanggan: normCust(x.customer || 'Umum'),
         barang: i.nama + (i.ukuran? ' ('+i.ukuran+')':''),
         qty: Number(i.qty||0), harga: Number(i.harga||0),
         subtotal: Number(i.qty||0)*Number(i.harga||0), trx: x.id
