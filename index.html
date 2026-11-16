@@ -656,8 +656,9 @@ function renderBulan(){
     box.innerHTML = rkCard(RK, 'Omzet ' + bulanLabel()) +
       '<div class="expRow">'+
         '<button id="expXls">Excel</button>'+
-        '<button id="expPdf">PDF</button>'+
-        '<button id="expWa" class="pri">Kirim WA</button>'+
+              '<button id="expPdf">PDF</button>'+
+              '<button id="expTeks">Teks</button>'+
+              '<button id="expWa" class="pri">Kirim WA</button>'+
       '</div>'+
       (days.length? (
           '<div class="seg">'+
@@ -671,8 +672,9 @@ function renderBulan(){
         : '<div class="rkNote">Belum ada transaksi bulan ini.</div>');
 
   $('expXls').addEventListener('click', ()=> eksporExcel());
-  $('expPdf').addEventListener('click', ()=> eksporPdf());
-  $('expWa').addEventListener('click', ()=> eksporWA());
+    $('expPdf').addEventListener('click', ()=> eksporPdf());
+    $('expTeks').addEventListener('click', ()=> teksWA());
+    $('expWa').addEventListener('click', ()=> eksporWA());
 }
 
 function barisEkspor(){
@@ -930,23 +932,36 @@ async function eksporPdf(){
   }catch(e){ alert('Gagal membuat PDF: ' + e.message); }
 }
 
+function teksWA(){
+  window.open('https://wa.me/?text=' + encodeURIComponent(teksBulan()), '_blank');
+}
+
 async function eksporWA(){
   try{
     toast2('Menyiapkan file...');
     const xl = new Blob([buatXlsx()], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     const pdf = new Blob([buatPdf()], {type:'application/pdf'});
     const teks = teksBulan();
+    let disalin = false;
+    try{ await navigator.clipboard.writeText(teks); disalin = true; }catch(e){}
     const f1 = new File([xl], namaFile('xlsx'), {type: xl.type});
     const f2 = new File([pdf], namaFile('pdf'), {type: pdf.type});
+    let terkirim = false;
     if(navigator.canShare && navigator.canShare({files:[f1, f2]})){
-      try{ await navigator.share({files:[f1, f2], title:'Rekap ' + bulanLabel(), text: teks}); return; }catch(e){}
+      try{ await navigator.share({files:[f1, f2], title:'Rekap ' + bulanLabel(), text: teks}); terkirim = true; }catch(e){}
     }
-    if(navigator.canShare && navigator.canShare({files:[f1]})){
-      try{ await navigator.share({files:[f1], title:'Rekap ' + bulanLabel(), text: teks}); return; }catch(e){}
+    if(!terkirim && navigator.canShare && navigator.canShare({files:[f1]})){
+      try{ await navigator.share({files:[f1], title:'Rekap ' + bulanLabel(), text: teks}); terkirim = true; }catch(e){}
     }
-    window.open('https://wa.me/?text=' + encodeURIComponent(teks), '_blank');
-    unduh(xl, namaFile('xlsx'));
-    toast2('File Excel diunduh - lampirkan di WhatsApp');
+    if(!terkirim){
+      unduh(xl, namaFile('xlsx')); unduh(pdf, namaFile('pdf'));
+      window.open('https://wa.me/?text=' + encodeURIComponent(teks), '_blank');
+      toast2('File diunduh. Teks rekap dibuka di WhatsApp - lampirkan 2 file tadi.');
+      return;
+    }
+    toast2(disalin
+      ? 'PDF+Excel siap dikirim. Teks rekap sudah disalin - tekan lama di chat WhatsApp lalu Tempel.'
+      : 'PDF+Excel siap dikirim. Tombol Teks untuk mengirim teks rekap.');
   }catch(e){ alert('Gagal mengirim: ' + e.message); }
 }
 
