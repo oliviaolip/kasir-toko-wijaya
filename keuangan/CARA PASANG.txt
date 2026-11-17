@@ -1,0 +1,70 @@
+CARA PASANG APLIKASI KEUANGAN MINGGUAN
+======================================
+
+Ada 2 bagian: (1) Google Sheets + Apps Script sebagai tempat simpan data,
+(2) file index.html yang dibuka di HP.
+
+--------------------------------------------------
+LANGKAH 1 — Siapkan Google Sheet
+--------------------------------------------------
+1. Buka Google Drive, klik Baru > Google Sheets > Spreadsheet kosong.
+2. Ganti nama jadi: KEUANGAN MINGGUAN
+3. Di menu atas klik: Extensions (Ekstensi) > Apps Script.
+4. Di jendela Apps Script, klik file "Code.gs", HAPUS semua tulisan di dalamnya.
+5. Buka file Code.gs yang saya kirim, salin SEMUA isinya, tempel ke jendela
+   Apps Script tadi.
+6. Tekan Ctrl + S (simpan).
+
+--------------------------------------------------
+LANGKAH 2 — Pasang sebagai Web App (supaya bisa diakses dari HP)
+--------------------------------------------------
+1. Kanan atas jendela Apps Script: klik Deploy > New deployment.
+2. Klik ikon gerigi di sebelah "Select type" > pilih Web app.
+3. Isi:
+   - Description  : keuangan mingguan
+   - Execute as   : Me
+   - Who has access : Anyone
+4. Klik Deploy.
+5. Muncul layar izin Google: klik Authorize access > pilih akun Gmail kamu >
+   Advanced > Go to ... (unsafe) > Allow.
+   ("unsafe" itu normal, karena skrip ini buatan sendiri.)
+6. Muncul URL panjang berakhiran /exec. KLIK SALIN. Ini URL penting.
+
+Catatan: kalau nanti kode Code.gs diubah, lakukan Deploy > Manage deployments >
+ikon pensil > Version: New version > Deploy. URL /exec tetap sama.
+
+--------------------------------------------------
+LANGKAH 3 — Buka aplikasinya di HP
+--------------------------------------------------
+1. Kirim file index.html ke HP (WhatsApp diri sendiri / Google Drive), buka
+   dengan Chrome.
+   (Kalau dihosting di GitHub Pages, cukup buka linknya.)
+2. Di aplikasi klik tombol ⚙ kanan atas.
+3. Tempel URL /exec tadi. Klik Simpan.
+4. Klik Uji — harus muncul "Tersambung. Minggu: ...".
+5. Klik Salin link — link yang tersalin sudah membawa URL script di dalamnya.
+   Simpan link itu di bookmark atau chat diri sendiri.
+
+URL script juga tersimpan otomatis di HP (localStorage), jadi tab baru tidak
+perlu isi ulang. Kalau suatu saat Chrome menghapus data situs, cukup buka link
+yang tadi disalin (URL script ikut di dalam link).
+
+--------------------------------------------------
+CARA PAKAI SEHARI-HARI
+--------------------------------------------------
+- Tiap minggu mulai dengan modal Rp 500.000 (otomatis).
+- Isi transaksi: Tanggal, Keterangan, pilih Keluar/Masuk, Nominal, Simpan.
+- 4 kartu di atas: Saldo Operasional, Pengeluaran, Pendapatan, Estimasi Bibit.
+- Akhir minggu: klik "Hitung Tutup Buku / Alokasi Bibit".
+  Sisa bersih (Pendapatan - Pengeluaran) dicatat sebagai baris "Bibit".
+  Kalau dihitung ulang, baris Bibit minggu itu diganti, tidak dobel.
+- Minggu berikutnya: klik "Mulai Minggu Baru / Reset Saldo".
+  Saldo kembali Rp 500.000, transaksi minggu lalu tetap tersimpan di Sheets.
+
+--------------------------------------------------
+ISI GOOGLE SHEET (dibuat otomatis, jangan diubah manual)
+--------------------------------------------------
+Sheet "Transaksi": ID | Tanggal | Keterangan | Jenis | Nominal | Minggu | Dibuat
+Sheet "Minggu"   : Kunci | Minggu | Mulai | Modal | Status | Bibit | Diperbarui
+
+Jangan hapus baris header. Boleh melihat isinya kapan saja dari Sheet.

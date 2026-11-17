@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f766e">
+<title>Keuangan Mingguan</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = { theme: { extend: { colors: { brand: { 50:'#f0fdfa',100:'#ccfbf1',600:'#0d9488',700:'#0f766e',800:'#115e59' } } } } };
+</script>
+<style>
+  body { -webkit-tap-highlight-color: transparent; }
+  input, button, select { font-size: 16px; }   /* cegah zoom otomatis di iPhone */
+  .num { font-variant-numeric: tabular-nums; }
+  .sheet { max-height: 90vh; overflow: auto; }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800 overflow-x-hidden">
+
+<div class="max-w-2xl mx-auto pb-28">
+
+  <!-- header -->
+  <header class="bg-brand-700 text-white px-4 pt-5 pb-4 rounded-b-3xl shadow">
+    <div class="flex items-start justify-between gap-2">
+      <div class="min-w-0">
+        <div class="text-xs uppercase tracking-wide text-brand-100">Pencatatan Keuangan</div>
+        <h1 class="text-xl font-semibold truncate">Minggu Berjalan</h1>
+        <div id="weekLabel" class="text-sm text-brand-100 mt-0.5 truncate">memuat…</div>
+      </div>
+      <div class="flex gap-2 shrink-0">
+        <button id="btnHistory" class="px-3 py-2 rounded-xl bg-white/15 text-sm" title="Riwayat minggu">Riwayat</button>
+        <button id="btnCfg" class="px-3 py-2 rounded-xl bg-white/15 text-sm" title="Pengaturan">⚙</button>
+      </div>
+    </div>
+
+    <!-- kartu ringkasan -->
+    <div class="grid grid-cols-2 gap-2.5 mt-4">
+      <div class="bg-white/12 rounded-2xl p-3">
+        <div class="text-[11px] text-brand-100">Sisa Saldo Operasional</div>
+        <div id="cSaldo" class="text-[15px] leading-tight font-semibold num mt-0.5 break-words">Rp 0</div>
+      </div>
+      <div class="bg-white/12 rounded-2xl p-3">
+        <div class="text-[11px] text-brand-100">Pengeluaran Minggu Ini</div>
+        <div id="cPeng" class="text-[15px] leading-tight font-semibold num mt-0.5 break-words">Rp 0</div>
+      </div>
+      <div class="bg-white/12 rounded-2xl p-3">
+        <div class="text-[11px] text-brand-100">Pendapatan Minggu Ini</div>
+        <div id="cPen" class="text-[15px] leading-tight font-semibold num mt-0.5 break-words">Rp 0</div>
+      </div>
+      <div class="bg-white/12 rounded-2xl p-3">
+        <div class="text-[11px] text-brand-100">Estimasi Sisa untuk Bibit</div>
+        <div id="cBibit" class="text-[15px] leading-tight font-semibold num mt-0.5 break-words">Rp 0</div>
+      </div>
+    </div>
+    <div class="text-[11px] text-brand-100 mt-2">Modal awal minggu <span id="modalTxt" class="num">Rp 0</span></div>
+  </header>
+
+  <div id="banner" class="hidden mx-4 mt-3 rounded-xl px-3 py-2 text-sm"></div>
+
+  <!-- form input -->
+  <section class="bg-white mx-4 mt-4 rounded-2xl p-4 shadow-sm">
+    <h2 class="font-semibold text-slate-700 mb-3">Tambah Transaksi</h2>
+    <form id="fTrx" class="space-y-3">
+      <div class="grid grid-cols-2 gap-3 min-w-0">
+        <label class="block min-w-0">
+          <span class="text-xs text-slate-500">Tanggal</span>
+          <input id="fTgl" type="date" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 num">
+        </label>
+        <div>
+          <span class="text-xs text-slate-500">Jenis</span>
+          <div class="mt-1 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
+            <button type="button" id="jPeng" data-jenis="Pengeluaran" class="rounded-lg py-2 text-sm font-medium">Keluar</button>
+            <button type="button" id="jPen" data-jenis="Pendapatan" class="rounded-lg py-2 text-sm font-medium">Masuk</button>
+          </div>
+        </div>
+      </div>
+      <label class="block">
+        <span class="text-xs text-slate-500">Keterangan</span>
+        <input id="fKet" type="text" maxlength="200" placeholder="mis. Beli gas, penjualan UHT" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5">
+      </label>
+      <label class="block">
+        <span class="text-xs text-slate-500">Nominal (Rp)</span>
+        <input id="fNom" type="number" inputmode="numeric" min="1" step="1" placeholder="0" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 num">
+        <span id="nomHint" class="text-[11px] text-slate-400"></span>
+      </label>
+      <button id="btnAdd" type="submit" class="w-full rounded-xl bg-brand-700 text-white py-3 font-medium">Simpan Transaksi</button>
+    </form>
+    <p id="formMsg" class="text-xs mt-2 text-slate-500"></p>
+  </section>
+
+  <!-- tabel riwayat minggu berjalan -->
+  <section class="bg-white mx-4 mt-4 rounded-2xl p-4 shadow-sm">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="font-semibold text-slate-700">Riwayat Minggu Ini</h2>
+      <button id="btnRefresh" class="text-xs text-brand-700 underline">muat ulang</button>
+    </div>
+    <div class="overflow-x-auto -mx-1">
+      <table class="w-full text-sm min-w-[460px]">
+        <thead>
+          <tr class="text-[11px] uppercase text-slate-500 border-b border-slate-200">
+            <th class="text-left px-1 py-2 font-medium">Tanggal</th>
+            <th class="text-left px-1 py-2 font-medium">Keterangan</th>
+            <th class="text-right px-1 py-2 font-medium">Keluar</th>
+            <th class="text-right px-1 py-2 font-medium">Masuk</th>
+            <th class="text-right px-1 py-2 font-medium">Saldo</th>
+            <th class="w-8"></th>
+          </tr>
+        </thead>
+        <tbody id="rowsT"></tbody>
+      </table>
+    </div>
+    <div id="emptyT" class="text-center text-sm text-slate-400 py-6">Belum ada transaksi minggu ini.</div>
+  </section>
+
+  <!-- aksi akhir minggu -->
+  <section class="mx-4 mt-4 grid grid-cols-1 gap-2.5">
+    <button id="btnTutup" class="rounded-2xl bg-amber-500 text-white py-3.5 font-medium shadow-sm">Hitung Tutup Buku / Alokasi Bibit</button>
+    <button id="btnBaru" class="rounded-2xl border border-brand-700 text-brand-700 py-3.5 font-medium">Mulai Minggu Baru / Reset Saldo</button>
+  </section>
+
+  <p class="text-center text-[11px] text-slate-400 mt-5">Data tersimpan di Google Sheets · app v<span id="verTxt">1</span></p>
+</div>
+
+<!-- ===== modal pengaturan ===== -->
+<div id="mCfg" class="hidden fixed inset-0 bg-black/40 z-40">
+  <div class="sheet bg-white w-full max-w-md mx-auto rounded-t-3xl p-5 mt-auto fixed bottom-0">
+    <h2 class="font-semibold text-lg mb-3">Pengaturan</h2>
+    <label class="block">
+      <span class="text-xs text-slate-500">URL Web App Apps Script (akhiran /exec)</span>
+      <input id="fUrl" type="url" placeholder="https://script.google.com/macros/s/…/exec" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5">
+    </label>
+    <p id="cfgMsg" class="text-xs mt-2 text-slate-500"></p>
+    <div class="grid grid-cols-2 gap-2 mt-4">
+      <button id="cfgSave" class="rounded-xl bg-brand-700 text-white py-3 font-medium">Simpan</button>
+      <button id="cfgCopy" class="rounded-xl bg-slate-100 py-3 font-medium">Salin link</button>
+      <button id="cfgTest" class="rounded-xl bg-slate-100 py-3 font-medium">Uji</button>
+      <button id="cfgClose" class="rounded-xl bg-slate-100 py-3 font-medium">Tutup</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== modal tutup buku ===== -->
+<div id="mTutup" class="hidden fixed inset-0 bg-black/40 z-40">
+  <div class="sheet bg-white w-full max-w-md mx-auto rounded-t-3xl p-5 mt-auto fixed bottom-0">
+    <h2 class="font-semibold text-lg">Tutup Buku Minggu Ini</h2>
+    <div class="mt-3 space-y-1.5 text-sm num" id="tutupRinci"></div>
+    <p class="text-xs text-slate-500 mt-3">Sisa bersih dicatat sebagai baris <b>Bibit</b> di Google Sheets. Kalau dihitung ulang, baris Bibit minggu ini diganti, bukan dobel.</p>
+    <div class="grid grid-cols-2 gap-2 mt-4">
+      <button id="tutupOk" class="rounded-xl bg-amber-500 text-white py-3 font-medium">Catat Bibit</button>
+      <button id="tutupNo" class="rounded-xl bg-slate-100 py-3 font-medium">Batal</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== modal minggu baru ===== -->
+<div id="mBaru" class="hidden fixed inset-0 bg-black/40 z-40">
+  <div class="sheet bg-white w-full max-w-md mx-auto rounded-t-3xl p-5 mt-auto fixed bottom-0">
+    <h2 class="font-semibold text-lg">Mulai Minggu Baru</h2>
+    <p class="text-sm text-slate-600 mt-2">Saldo minggu baru kembali ke <b class="num">Rp 500.000</b>. Transaksi minggu ini tetap tersimpan di Google Sheets sebagai riwayat.</p>
+    <div class="grid grid-cols-2 gap-2 mt-4">
+      <button id="baruOk" class="rounded-xl bg-brand-700 text-white py-3 font-medium">Mulai</button>
+      <button id="baruNo" class="rounded-xl bg-slate-100 py-3 font-medium">Batal</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== modal riwayat ===== -->
+<div id="mHist" class="hidden fixed inset-0 bg-black/40 z-40">
+  <div class="sheet bg-white w-full max-w-md mx-auto rounded-t-3xl p-5 mt-auto fixed bottom-0">
+    <h2 class="font-semibold text-lg mb-3">Riwayat Minggu</h2>
+    <div id="histList" class="space-y-2 text-sm"></div>
+    <button id="histClose" class="w-full rounded-xl bg-slate-100 py-3 font-medium mt-4">Tutup</button>
+  </div>
+</div>
+
+<script>
+const APP_V = '1';
+const LSK = 'keuanganMingguanUrl';
+const $ = id => document.getElementById(id);
+const rp = n => 'Rp ' + (Number(n) < 0 ? '-' : '') + Math.abs(Math.round(Number(n) || 0)).toLocaleString('id-ID');
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const tglID = s => { const p = String(s || '').slice(0, 10).split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : String(s || ''); };
+const todayYMD = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+
+let URL_S = localStorage.getItem(LSK) || '';
+let D = null, JENIS = 'Pengeluaran', LIHAT = null, BUSY = false;
+
+/* ---------- setelan URL: 3 lapis supaya tidak hilang ---------- */
+function simpanUrl(u) {
+  URL_S = String(u || '').trim();
+  try { localStorage.setItem(LSK, URL_S); } catch (e) {}
+  try {
+    const q = new URLSearchParams(location.search);
+    if (URL_S) q.set('u', URL_S); else q.delete('u');
+    history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q.toString() : ''));
+  } catch (e) {}
+}
+async function bootUrl() {
+  const q = new URLSearchParams(location.search);
+  if (q.get('u')) simpanUrl(q.get('u'));
+  if (URL_S) return;
+  try {
+    const r = await fetch('config.json?x=' + Date.now(), { cache: 'no-store' });
+    const c = await r.json();
+    if (c && c.u) simpanUrl(c.u);
+  } catch (e) {}
+}
+
+/* ---------- API ---------- */
+function apiUrl(extra) {
+  if (!URL_S) return '';
+  return URL_S + (URL_S.includes('?') ? '&' : '?') + (extra || ('t=' + Date.now()));
+}
+async function load(kunci) {
+  if (!URL_S) { banner('URL Apps Script belum diisi. Buka ⚙ lalu tempelkan URL /exec.', 'warn'); return; }
+  try {
+    const r = await fetch(apiUrl('minggu=' + encodeURIComponent(kunci || '') + '&t=' + Date.now()), { cache: 'no-store' });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'gagal');
+    D = j; if (!kunci) LIHAT = null;
+    banner('', '');
+    render();
+  } catch (e) {
+    banner('Gagal memuat data. Cek internet / URL Apps Script.', 'err');
+  }
+}
+async function kirim(payload) {
+  if (!URL_S) { banner('URL Apps Script belum diisi. Buka ⚙ dulu.', 'warn'); return null; }
+  BUSY = true;
+  try {
+    const r = await fetch(apiUrl(), { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload) });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'gagal');
+    D = j; LIHAT = null; banner('', ''); render();
+    return j;
+  } catch (e) {
+    banner('Gagal menyimpan: ' + (e.message || 'cek koneksi'), 'err');
+    return null;
+  } finally { BUSY = false; render(); }
+}
+
+/* ---------- render ---------- */
+function banner(msg, kind) {
+  const b = $('banner');
+  if (!msg) { b.className = 'hidden mx-4 mt-3'; b.textContent = ''; return; }
+  b.textContent = msg;
+  b.className = 'mx-4 mt-3 rounded-xl px-3 py-2 text-sm ' +
+    (kind === 'err' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-900');
+}
+function render() {
+  if (!D) return;
+  const m = D.minggu, r = D.ringkasan;
+  $('weekLabel').textContent = m.label + (LIHAT ? ' · melihat riwayat' : (m.sudahTutup ? ' · sudah tutup buku' : ''));
+  $('modalTxt').textContent = rp(r.modal);
+  $('cSaldo').textContent = rp(r.saldo);
+  $('cPeng').textContent = rp(r.pengeluaran);
+  $('cPen').textContent = rp(r.pendapatan);
+  $('cBibit').textContent = rp(r.bibit);
+  $('cSaldo').className = 'text-[15px] leading-tight font-semibold num mt-0.5 break-words' + (r.saldo < 0 ? ' text-rose-200' : '');
+
+  const list = (D.trx || []).slice().sort((a, b) => a.tanggal < b.tanggal ? -1 : a.tanggal > b.tanggal ? 1 : 0);
+  let jalan = r.modal;
+  const rows = list.map(it => {
+    const bib = it.jenis === 'Bibit';
+    if (!bib) jalan += (it.jenis === 'Pendapatan' ? it.nominal : -it.nominal);
+    return '<tr class="border-b border-slate-100 ' + (bib ? 'bg-amber-50/60' : '') + '">' +
+      '<td class="px-1 py-2 whitespace-nowrap text-slate-500 num">' + tglID(it.tanggal) + '</td>' +
+      '<td class="px-1 py-2 ' + (bib ? 'font-medium text-amber-800' : '') + '">' + esc(it.keterangan) + '</td>' +
+      '<td class="px-1 py-2 text-right num text-rose-700 whitespace-nowrap">' + (it.jenis === 'Pengeluaran' ? rp(it.nominal) : '') + '</td>' +
+      '<td class="px-1 py-2 text-right num text-emerald-700 whitespace-nowrap">' + (it.jenis === 'Pendapatan' ? rp(it.nominal) : '') + '</td>' +
+      '<td class="px-1 py-2 text-right num whitespace-nowrap ' + (bib ? 'text-amber-800 font-medium' : 'text-slate-600') + '">' +
+        (bib ? rp(it.nominal) : rp(jalan)) + '</td>' +
+      '<td class="px-1 py-2 text-right">' + (bib ? '' : '<button data-del="' + esc(it.id) + '" class="text-slate-300 hover:text-rose-600">&times;</button>') + '</td></tr>';
+  }).join('');
+  $('rowsT').innerHTML = rows;
+  $('emptyT').style.display = list.length ? 'none' : '';
+
+  // tombol nonaktif hanya saat melihat riwayat minggu lama (BUSY bukan alasan: render terjadi di tengah proses)
+  const lama = !!LIHAT;
+  ['btnTutup', 'btnBaru', 'btnAdd'].forEach(id => {
+    $(id).disabled = lama;
+    $(id).classList.toggle('opacity-40', lama);
+  });
+  $('nomHint').textContent = $('fNom').value ? rp($('fNom').value) : '';
+}
+
+/* ---------- form ---------- */
+function setJenis(j) {
+  JENIS = j;
+  const on = 'rounded-lg py-2 text-sm font-medium bg-white shadow-sm';
+  const off = 'rounded-lg py-2 text-sm font-medium text-slate-500';
+  $('jPeng').className = j === 'Pengeluaran' ? on : off;
+  $('jPen').className = j === 'Pendapatan' ? on : off;
+  $('jPeng').style.color = j === 'Pengeluaran' ? '#be123c' : '';
+  $('jPen').style.color = j === 'Pendapatan' ? '#047857' : '';
+}
+$('jPeng').addEventListener('click', () => setJenis('Pengeluaran'));
+$('jPen').addEventListener('click', () => setJenis('Pendapatan'));
+$('fNom').addEventListener('input', () => { $('nomHint').textContent = $('fNom').value ? rp($('fNom').value) : ''; });
+
+$('fTrx').addEventListener('submit', async e => {
+  e.preventDefault();
+  if (BUSY) return;
+  const ket = $('fKet').value.trim();
+  const nom = Math.round(Number($('fNom').value) || 0);
+  if (!ket) { $('formMsg').textContent = 'Keterangan belum diisi.'; $('fKet').focus(); return; }
+  if (nom <= 0) { $('formMsg').textContent = 'Nominal harus lebih besar dari 0.'; $('fNom').focus(); return; }
+  $('formMsg').textContent = 'Menyimpan…';
+  const ok = await kirim({ action: 'tambah', tanggal: $('fTgl').value || todayYMD(), keterangan: ket, jenis: JENIS, nominal: nom });
+  if (ok) {
+    $('formMsg').textContent = 'Tersimpan: ' + (JENIS === 'Pendapatan' ? '+' : '−') + rp(nom);
+    $('fKet').value = ''; $('fNom').value = ''; $('nomHint').textContent = '';
+    $('fTgl').value = todayYMD();
+  } else {
+    $('formMsg').textContent = 'Gagal menyimpan. Coba lagi.';
+  }
+});
+
+$('rowsT').addEventListener('click', async e => {
+  const b = e.target.closest('[data-del]');
+  if (!b) return;
+  if (!confirm('Hapus transaksi ini?')) return;
+  await kirim({ action: 'hapus', id: b.getAttribute('data-del') });
+});
+
+$('btnRefresh').addEventListener('click', () => load(LIHAT));
+
+/* ---------- tutup buku ---------- */
+$('btnTutup').addEventListener('click', () => {
+  if (!D || BUSY) return;
+  const r = D.ringkasan;
+  $('tutupRinci').innerHTML =
+    'Pendapatan <span class="float-right">' + rp(r.pendapatan) + '</span><br>' +
+    'Pengeluaran <span class="float-right">− ' + rp(r.pengeluaran) + '</span><br>' +
+    '<span class="block border-t border-slate-200 mt-2 pt-2 font-semibold">Sisa bersih (Bibit) <span class="float-right">' + rp(r.bibit) + '</span></span>';
+  $('mTutup').classList.remove('hidden');
+});
+$('tutupNo').addEventListener('click', () => $('mTutup').classList.add('hidden'));
+$('tutupOk').addEventListener('click', async () => {
+  $('mTutup').classList.add('hidden');
+  const j = await kirim({ action: 'tutup' });
+  if (j) banner('Tutup buku tercatat: Bibit ' + rp(j.ringkasan.bibit) + '.', 'warn');
+});
+
+/* ---------- minggu baru ---------- */
+$('btnBaru').addEventListener('click', () => { if (!BUSY) $('mBaru').classList.remove('hidden'); });
+$('baruNo').addEventListener('click', () => $('mBaru').classList.add('hidden'));
+$('baruOk').addEventListener('click', async () => {
+  $('mBaru').classList.add('hidden');
+  const j = await kirim({ action: 'mingguBaru' });
+  if (j) banner('Minggu baru dimulai. Saldo kembali ' + rp(j.ringkasan.saldo) + '.', 'warn');
+});
+
+/* ---------- riwayat ---------- */
+$('btnHistory').addEventListener('click', () => {
+  if (!D) return;
+  $('histList').innerHTML = (D.riwayat || []).map(w =>
+    '<button data-mgg="' + esc(w.kunci) + '" class="w-full text-left rounded-xl border border-slate-200 px-3 py-2.5 ' +
+    (w.status === 'aktif' ? 'bg-brand-50 border-brand-600' : '') + '">' +
+    '<div class="font-medium">' + esc(w.label) + ' <span class="text-[11px] text-slate-500">' + (w.status === 'aktif' ? '· berjalan' : '· selesai') + '</span></div>' +
+    '<div class="text-xs text-slate-500">Bibit: ' + (w.bibit == null ? '—' : rp(w.bibit)) + '</div></button>'
+  ).join('') || '<p class="text-slate-400">Belum ada riwayat.</p>';
+  $('mHist').classList.remove('hidden');
+});
+$('histClose').addEventListener('click', () => $('mHist').classList.add('hidden'));
+$('histList').addEventListener('click', e => {
+  const b = e.target.closest('[data-mgg]');
+  if (!b) return;
+  const k = b.getAttribute('data-mgg');
+  $('mHist').classList.add('hidden');
+  const aktif = D && D.minggu && D.minggu.kunci === k;
+  LIHAT = aktif ? null : k;
+  load(LIHAT);
+});
+
+/* ---------- pengaturan URL ---------- */
+$('btnCfg').addEventListener('click', () => {
+  $('fUrl').value = URL_S;
+  $('cfgMsg').textContent = URL_S ? 'Tersambung ke Apps Script.' : 'URL belum diisi.';
+  $('mCfg').classList.remove('hidden');
+});
+$('cfgClose').addEventListener('click', () => $('mCfg').classList.add('hidden'));
+$('cfgSave').addEventListener('click', async () => {
+  simpanUrl($('fUrl').value);
+  $('cfgMsg').textContent = URL_S ? 'Disimpan. Setelan juga ikut di alamat halaman ini.' : 'URL dikosongkan.';
+  if (URL_S) await load(null);
+});
+$('cfgTest').addEventListener('click', async () => {
+  const u = $('fUrl').value.trim();
+  if (!u) { $('cfgMsg').textContent = 'Isi URL dulu.'; return; }
+  $('cfgMsg').textContent = 'Menguji…';
+  try {
+    const r = await fetch(u + (u.includes('?') ? '&' : '?') + 't=' + Date.now());
+    const j = await r.json();
+    $('cfgMsg').textContent = j.ok ? ('Tersambung. Minggu: ' + j.minggu.label) : ('Balasan: ' + (j.error || 'tidak ok'));
+  } catch (e) { $('cfgMsg').textContent = 'Gagal. Cek URL (akhiran /exec) dan akses Anyone.'; }
+});
+$('cfgCopy').addEventListener('click', async () => {
+  const u = $('fUrl').value.trim();
+  if (u) simpanUrl(u);
+  const link = location.origin + location.pathname + location.search;
+  try { await navigator.clipboard.writeText(link); $('cfgMsg').textContent = 'Link disalin — setelan URL ikut di dalamnya.'; }
+  catch (e) { $('cfgMsg').textContent = link; }
+});
+
+/* ---------- start ---------- */
+$('verTxt').textContent = APP_V;
+setJenis('Pengeluaran');
+$('fTgl').value = todayYMD();
+bootUrl().then(() => load(null));
+setInterval(() => { if (!document.hidden && !LIHAT) load(null); }, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && !LIHAT && D) load(null); });
+</script>
+</body>
+</html>
